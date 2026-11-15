@@ -1,56 +1,61 @@
-# Welcome to your Expo app 👋
+# Presença+
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Controle de chamadas para professores e alunos de instituições de ensino superior. Aplicativo Android e iOS com Expo SDK 58, Expo Router e TypeScript.
 
-## Get started
+A interface deste pacote é navegável no Expo Go. Login, recuperação de senha, chamada e relatórios ainda não gravam dados: a autenticação e o backend entram no próximo pacote.
 
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Executar
 
 ```bash
-npm run reset-project
+npm install
+npx expo start
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+Abra o projeto no Expo Go (Android ou iOS) pelo QR Code. O SDK do celular precisa ser o 58.
 
-### Other setup steps
+Para checar o projeto:
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+```bash
+npx tsc --noEmit
+npx expo-doctor@latest
+```
 
-## Learn more
+## Arquitetura
 
-To learn more about developing your project with Expo, look at the following resources:
+```text
+src/app/            rotas do Expo Router
+src/features/       telas por área (boas-vindas, acesso, professor, aluno)
+src/components/ui/  design system
+src/domain/         tipos e regras puras, como o limite de 75%
+src/data/access/    contrato de leitura
+src/data/demo/      dados locais de demonstração
+src/state/          modo demonstração
+src/theme/          cores, espaçamento e raios
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+As rotas em `src/app/` apenas ligam o endereço à tela. Cálculo de frequência fica em `src/domain`. Listas de exemplo ficam em `src/data/demo` e passam pelo contrato `AttendanceSource`.
 
-## Join the community
+## Modo demonstração
 
-Join our community of developers creating universal apps.
+Na tela de entrar, os botões **Pré-visualizar como professor** e **Pré-visualizar como aluno** abrem `src/app/demo/`. Um aviso fixo deixa claro que não há autenticação. O botão **Entrar** valida o formulário e informa que o acesso ainda não está conectado.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Para remover a pré-visualização quando a autenticação real existir:
+
+1. Apague `src/app/demo/`, `src/state/demo-mode.tsx` e `src/data/demo/`.
+2. Implemente `AttendanceSource` com a fonte real e troque `previewSource` em `src/data/index.ts`.
+3. Retire os botões de pré-visualização de `src/features/auth/login-screen.tsx`.
+
+## Identidade
+
+Azul principal `#073B91`, destaque `#0B8FF9`, fundo `#F7F9FD`, presença `#13B981`, falta `#EF4444`. A referência visual está em `design/`.
+
+## Colaboração
+
+O repositório é só deste aplicativo. Não misture arquivos com outros projetos da máquina. Não há credenciais neste pacote. `ios/` e `android/` não devem ser criados à mão.
+
+## Fora deste pacote
+
+- Supabase e autenticação real
+- Persistência de chamada, perfil e relatórios
+- QR Code gerado de fato
+- Exportação de relatórios

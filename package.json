@@ -1,6 +1,7 @@
 {
   "name": "presencaplus",
   "version": "1.0.0",
+  "description": "Presença+ — controle de chamadas para professores e alunos.",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/ui": "~58.0.28",
@@ -33,7 +34,6 @@
   },
   "scripts": {
     "start": "expo start",
-    "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",

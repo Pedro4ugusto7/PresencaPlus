@@ -1,0 +1,25 @@
+---
+description: Limites do Presença+ — isolamento, Expo Go e dados de demonstração
+alwaysApply: true
+---
+
+# Presença+
+
+App acadêmico de chamada (Android e iOS) em `C:\Projetos\PresencaPlus`. Expo SDK 58 e Expo Router. Não atualize o SDK.
+
+- Não acesse, leia nem altere o SISFAC ou qualquer diretório fora deste repositório.
+- Não faça commit, push ou comandos Git destrutivos sem pedido explícito.
+- Não crie segredos, `.env` com credenciais, nem autenticação que pareça real.
+- Bibliotecas novas precisam funcionar no Expo Go. Sem código nativo fora do que o Expo Go já inclui.
+- Não edite `ios/` nem `android/` se forem gerados. Configure nativo em `app.json`.
+- Interface em português. Código e pastas de arquitetura em inglês, rotas no domínio (`turmas`, `chamada`).
+
+Dados de pré-visualização ficam em `src/data/demo/` e devem dizer que são locais. Botões não podem simular sucesso de login, envio ou gravação.
+
+```tsx
+// ❌ parecer autenticado
+onPress={() => router.replace('/inicio')}
+
+// ✅ avisar e não autenticar
+setNotice(pendingMessages.auth)
+```

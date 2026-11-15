@@ -1,0 +1,23 @@
+---
+description: Tokens visuais, safe area e componentes do Presença+
+globs: src/components/**/*.tsx
+alwaysApply: false
+---
+
+# Design system
+
+Use `palette`, `spacing` e `radius` de `src/theme`. Azul `#073B91`, destaque `#0B8FF9`, fundo `#F7F9FD`, presença `#13B981`, falta `#EF4444`.
+
+- Texto sobre cor clara usa o tom escuro do par (`present`, `absent`), não branco sobre o verde ou o vermelho vivos.
+- Telas passam por `Screen` para safe area, rolagem e teclado.
+- Toques úteis com `accessibilityRole` e área mínima de 44.
+- Ícones por `AppIcon`. Não introduza outra família de ícones.
+- A barra inferior é `RoleTabs`. Telas de aba usam `safeBottom={false}`.
+
+```tsx
+// ❌ cor solta e texto cortado
+<Text style={{ color: '#0B8FF9' }} numberOfLines={1}>Frequência</Text>
+
+// ✅ token e contraste
+<AppText tone="accent" size="label">Frequência</AppText>
+```
