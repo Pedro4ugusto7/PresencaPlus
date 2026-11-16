@@ -1,4 +1,5 @@
 import { StyleSheet, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 
 import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
@@ -9,16 +10,23 @@ type CodePanelProps = {
   code: string;
   validLabel: string;
   qrMessage: string;
+  qrValue?: string | null;
 };
 
-export function CodePanel({ code, validLabel, qrMessage }: CodePanelProps) {
+export function CodePanel({ code, validLabel, qrMessage, qrValue }: CodePanelProps) {
   return (
     <View style={styles.panel}>
       <View style={styles.qr}>
-        <AppIcon name="qr" size={42} color={palette.blue} />
-        <AppText size="caption" tone="muted" align="center">
-          {qrMessage}
-        </AppText>
+        {qrValue ? (
+          <QRCode value={qrValue} size={168} color={palette.blue} backgroundColor={palette.white} />
+        ) : (
+          <>
+            <AppIcon name="qr" size={42} color={palette.blue} />
+            <AppText size="caption" tone="muted" align="center">
+              {qrMessage}
+            </AppText>
+          </>
+        )}
       </View>
       <AppText size="caption" tone="muted" align="center">
         Código da aula

@@ -1,3 +1,4 @@
+import * as Linking from 'expo-linking';
 import { useState } from 'react';
 import { Pressable } from 'react-native';
 
@@ -6,24 +7,38 @@ import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
-import { pendingMessages } from '@/content/messages';
+import { connectionMessages } from '@/content/messages';
 import { useGoBack } from '@/navigation/use-go-back';
+import { useAuth } from '@/state/auth-session';
 import { hitSlop } from '@/theme';
 
 export function RecoveryScreen() {
   const goBack = useGoBack();
+  const auth = useAuth();
+  const redirectTo = Linking.createURL('/redefinir-senha');
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [notice, setNotice] = useState<string | null>(null);
+  const [noticeTone, setNoticeTone] = useState<'info' | 'warning'>('info');
+  const [submitting, setSubmitting] = useState(false);
 
-  function submit() {
+  async function submit() {
     if (!email.trim().includes('@')) {
       setError('Informe o e-mail institucional.');
       setNotice(null);
       return;
     }
     setError(undefined);
-    setNotice(pendingMessages.recovery);
+    setSubmitting(true);
+    const result = await auth.requestPasswordReset(email, redirectTo);
+    setSubmitting(false);
+    if (!result.ok) {
+      setNoticeTone('warning');
+      setNotice(result.message);
+      return;
+    }
+    setNoticeTone('info');
+    setNotice(connectionMessages.recoveryAccepted);
   }
 
   return (
@@ -37,7 +52,7 @@ export function RecoveryScreen() {
         Recuperar senha
       </AppText>
       <AppText size="label" tone="muted">
-        Informe o e-mail institucional. Nesta versão nenhuma mensagem é enviada.
+        Informe o e-mail da conta. O link precisa ser aberto neste aparelho.
       </AppText>
       <TextField
         label="E-mail institucional"
@@ -50,12 +65,15 @@ export function RecoveryScreen() {
         textContentType="emailAddress"
         error={error}
       />
+      <AppText size="caption" tone="muted">
+        Endereço de retorno deste aparelho: {redirectTo}
+      </AppText>
       <Button
-        label="Enviar instruções"
-        onPress={submit}
-        accessibilityHint="Não envia e-mail nesta versão"
+        label={submitting ? 'Enviando…' : 'Enviar instruções'}
+        onPress={() => void submit()}
+        disabled={submitting}
       />
-      {notice ? <Notice message={notice} tone="warning" /> : null}
+      {notice ? <Notice message={notice} tone={noticeTone} /> : null}
     </Screen>
   );
 }

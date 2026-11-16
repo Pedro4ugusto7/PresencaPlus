@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 
+import { DemoCatalogProvider } from '@/state/catalog';
 import { palette } from '@/theme';
 
 export const unstable_settings = {
@@ -8,11 +9,13 @@ export const unstable_settings = {
 
 export default function ProfessorLayout() {
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: palette.background },
-      }}
-    />
+    <DemoCatalogProvider role="professor">
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: palette.background },
+        }}
+      />
+    </DemoCatalogProvider>
   );
 }

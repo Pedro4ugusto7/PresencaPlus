@@ -17,10 +17,12 @@ type PersonRowProps = {
   name: string;
   mark: AttendanceMark;
   timeLabel: string;
+  pending?: boolean;
   onPress?: () => void;
 };
 
-export function PersonRow({ name, mark, timeLabel, onPress }: PersonRowProps) {
+export function PersonRow({ name, mark, timeLabel, pending = false, onPress }: PersonRowProps) {
+  const label = pending ? 'Pendente' : markLabel(mark);
   const content = (
     <>
       <Avatar name={name} />
@@ -32,7 +34,7 @@ export function PersonRow({ name, mark, timeLabel, onPress }: PersonRowProps) {
           {timeLabel}
         </AppText>
       </View>
-      <Badge label={markLabel(mark)} tone={badgeTone[mark]} />
+      <Badge label={label} tone={pending ? 'accent' : badgeTone[mark]} />
     </>
   );
 
@@ -43,7 +45,7 @@ export function PersonRow({ name, mark, timeLabel, onPress }: PersonRowProps) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${name}, ${markLabel(mark)}. Toque para alternar a pré-visualização.`}
+      accessibilityLabel={`${name}, ${label}. Toque para alternar a pré-visualização.`}
       onPress={onPress}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
       {content}

@@ -23,4 +23,4 @@ const classes = [{ id: '1', name: 'ADS' }]
 const classes = previewSource.listClasses()
 ```
 
-Não adicione estado global nem cliente remoto neste pacote. Listas de demonstração cabem em `ScrollView`.
+O cliente remoto fica em `src/data/remote`. A sessão fica em `src/state/auth-session.tsx`. A demonstração continua isolada em `src/app/demo` e `src/data/demo`, e não consulta o Supabase. Listas cabem em `ScrollView`.

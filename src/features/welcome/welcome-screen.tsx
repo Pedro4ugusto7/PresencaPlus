@@ -87,7 +87,7 @@ export function WelcomeScreen() {
           </View>
 
           <AppText size="caption" tone="muted" align="center">
-            O acesso é fornecido pela instituição. Esta versão ainda não autentica usuários.
+            O acesso é fornecido pela instituição. A pré-visualização local continua na tela de entrar.
           </AppText>
         </View>
       </ScrollView>

@@ -3,20 +3,27 @@ import { useMemo, useState } from 'react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Screen } from '@/components/ui/screen';
 import { SearchField } from '@/components/ui/search-field';
-import { previewSource } from '@/data';
 import { matchesSearch } from '@/domain';
 import { ClassCard } from '@/features/professor/class-card';
+import { CatalogGate } from '@/features/shared/catalog-gate';
+import { useCatalog } from '@/state/catalog';
 
 export function ClassesScreen() {
   const [query, setQuery] = useState('');
-  const classes = previewSource.listClasses();
+  const catalog = useCatalog();
+  const classes = catalog.classes;
   const visible = useMemo(
     () => classes.filter((item) => matchesSearch(query, item.discipline, item.program, item.room, item.period)),
     [classes, query],
   );
 
   return (
-    <Screen tone="brand" title="Minhas turmas" subtitle="Dados locais de demonstração" safeBottom={false}>
+    <CatalogGate title="Minhas turmas">
+    <Screen
+      tone="brand"
+      title="Minhas turmas"
+      subtitle={catalog.mode === 'demo' ? 'Dados locais de demonstração' : 'Turmas vinculadas à sua conta'}
+      safeBottom={false}>
       <SearchField value={query} onChangeText={setQuery} placeholder="Buscar turma ou sala" />
       {visible.length === 0 ? (
         <EmptyState
@@ -27,5 +34,6 @@ export function ClassesScreen() {
         visible.map((item) => <ClassCard key={item.id} item={item} />)
       )}
     </Screen>
+    </CatalogGate>
   );
 }

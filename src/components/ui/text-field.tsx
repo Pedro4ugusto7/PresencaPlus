@@ -17,6 +17,7 @@ type TextFieldProps = {
   autoComplete?: 'email' | 'password' | 'off';
   textContentType?: 'emailAddress' | 'password' | 'none' | 'oneTimeCode';
   maxLength?: number;
+  editable?: boolean;
 };
 
 export function TextField({
@@ -31,6 +32,7 @@ export function TextField({
   autoComplete = 'off',
   textContentType = 'none',
   maxLength,
+  editable = true,
 }: TextFieldProps) {
   const [focused, setFocused] = useState(false);
   const [hidden, setHidden] = useState(secure);
@@ -40,7 +42,7 @@ export function TextField({
       <AppText size="label" tone="muted">
         {label}
       </AppText>
-      <View style={[styles.field, focused && styles.focused, error ? styles.invalid : null]}>
+      <View style={[styles.field, focused && styles.focused, error ? styles.invalid : null, !editable && styles.locked]}>
         <TextInput
           value={value}
           onChangeText={onChangeText}
@@ -53,9 +55,11 @@ export function TextField({
           autoComplete={autoComplete}
           textContentType={textContentType}
           maxLength={maxLength}
+          editable={editable}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           accessibilityLabel={label}
+          accessibilityState={{ disabled: !editable }}
           style={styles.input}
         />
         {secure ? (
@@ -97,6 +101,9 @@ const styles = StyleSheet.create({
   },
   invalid: {
     borderColor: palette.absentBar,
+  },
+  locked: {
+    opacity: 0.55,
   },
   input: {
     flex: 1,

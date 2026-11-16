@@ -4,7 +4,7 @@ export type AttendanceMark = 'presente' | 'falta' | 'justificada';
 
 export type FrequencyTone = 'good' | 'warning' | 'critical';
 
-export interface DemoProfile {
+export interface AcademicProfile {
   id: string;
   role: UserRole;
   name: string;
@@ -16,11 +16,14 @@ export interface DemoProfile {
   course: string;
 }
 
+export type DemoProfile = AcademicProfile;
+
 export interface AttendanceEntry {
   id: string;
   name: string;
   mark: AttendanceMark;
   timeLabel: string;
+  pending?: boolean;
 }
 
 export interface ClassSession {
@@ -41,6 +44,11 @@ export interface ClassDetails extends ClassSession {
   students: AttendanceEntry[];
   sessionCode: string | null;
   sessionValidLabel: string | null;
+  openSessionId?: string | null;
+  heldSessions?: HeldClass[];
+  calledToday?: boolean;
+  /** Lista de matrícula ainda sem sessão de chamada. */
+  rosterPending?: boolean;
 }
 
 export interface StudentSubject {
@@ -56,7 +64,25 @@ export interface StudentSubject {
   absences: number;
   nextClassLabel: string;
   hasOpenCall: boolean;
+  openSessionId?: string | null;
   sessionCode: string | null;
+  currentCall?: StudentCallState | null;
+  previousCall?: StudentCallState | null;
+}
+
+export interface StudentCallState {
+  sessionId: string;
+  status: 'aberta' | 'encerrada';
+  startsAt: string;
+  codeExpiresAt: string | null;
+  mark: AttendanceMark | null;
+}
+
+export interface HeldClass {
+  id: string;
+  label: string;
+  status: 'aberta' | 'encerrada';
+  presentCount: number;
 }
 
 export interface HistoryEntry {

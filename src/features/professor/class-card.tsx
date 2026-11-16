@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { AppText } from '@/components/ui/app-text';
 import { FrequencyBar } from '@/components/ui/frequency-bar';
 import { attendanceRate, frequencyTone, type ClassSession } from '@/domain';
+import { useCatalog } from '@/state/catalog';
 
 type ClassCardProps = {
   item: ClassSession;
@@ -12,13 +13,14 @@ type ClassCardProps = {
 
 export function ClassCard({ item }: ClassCardProps) {
   const router = useRouter();
+  const catalog = useCatalog();
   const percent = attendanceRate(item.presentRecords, item.expectedRecords);
 
   return (
     <Card
       accessibilityLabel={`${item.discipline}, frequência ${percent} por cento`}
       onPress={() =>
-        router.push({ pathname: '/demo/professor/turma/[turmaId]', params: { turmaId: item.id } })
+        router.push(catalog.paths.classDetail(item.id))
       }>
       <AppText size="heading">{item.discipline}</AppText>
       <AppText size="caption" tone="muted">

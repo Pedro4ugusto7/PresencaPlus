@@ -21,7 +21,7 @@ const classes: ClassDetails[] = [
     hasOpenCall: true,
     students: openCallRoster,
     sessionCode: exampleSessionCode,
-    sessionValidLabel: 'Exemplo válido por 15 minutos',
+    sessionValidLabel: 'Exemplo válido por 10 minutos',
   },
   {
     id: 'bd',

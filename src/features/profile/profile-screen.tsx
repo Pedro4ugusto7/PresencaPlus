@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -7,8 +8,10 @@ import { InfoRow } from '@/components/ui/info-row';
 import { Notice } from '@/components/ui/notice';
 import { Screen } from '@/components/ui/screen';
 import { pendingMessages } from '@/content/messages';
-import { previewSource } from '@/data';
 import { roleLabel, type UserRole } from '@/domain';
+import { CatalogGate } from '@/features/shared/catalog-gate';
+import { useAuth } from '@/state/auth-session';
+import { useCatalog } from '@/state/catalog';
 
 type ProfileScreenProps = {
   role: UserRole;
@@ -16,13 +19,31 @@ type ProfileScreenProps = {
 
 export function ProfileScreen({ role }: ProfileScreenProps) {
   const router = useRouter();
-  const profile = previewSource.getProfile(role);
+  const catalog = useCatalog();
+  const auth = useAuth();
+  const [leaving, setLeaving] = useState(false);
+  const profile = catalog.profile;
+
+  async function leave() {
+    setLeaving(true);
+    if (catalog.mode === 'live') await auth.signOut();
+    router.replace('/');
+  }
+
+  if (!profile) {
+    return (
+      <CatalogGate title="Perfil">
+        {null}
+      </CatalogGate>
+    );
+  }
 
   return (
+    <CatalogGate title="Perfil">
     <Screen
       tone="brand"
       title="Perfil"
-      subtitle={`${roleLabel(role)} · demonstração`}
+      subtitle={catalog.mode === 'demo' ? `${roleLabel(role)} · demonstração` : roleLabel(profile.role)}
       safeBottom={false}>
       <Card>
         <Avatar name={profile.name} size={64} />
@@ -35,11 +56,13 @@ export function ProfileScreen({ role }: ProfileScreenProps) {
       </Card>
       <Notice message={pendingMessages.profile} />
       <Button
-        label="Sair da demonstração"
+        label={catalog.mode === 'demo' ? 'Sair da demonstração' : leaving ? 'Saindo…' : 'Sair'}
         variant="secondary"
         icon="leave"
-        onPress={() => router.replace('/')}
+        disabled={leaving}
+        onPress={() => void leave()}
       />
     </Screen>
+    </CatalogGate>
   );
 }

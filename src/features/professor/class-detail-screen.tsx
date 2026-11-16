@@ -6,14 +6,16 @@ import { AppText } from '@/components/ui/app-text';
 import { FrequencyBar } from '@/components/ui/frequency-bar';
 import { InfoRow } from '@/components/ui/info-row';
 import { Screen } from '@/components/ui/screen';
-import { previewSource } from '@/data';
 import { attendanceRate, frequencyTone } from '@/domain';
+import { CatalogGate } from '@/features/shared/catalog-gate';
 import { MissingRecord } from '@/features/shared/missing-record';
+import { useCatalog } from '@/state/catalog';
 import { useRouteParam } from '@/navigation/params';
 import { LoadingState } from '@/components/ui/loading-state';
 
 export function ClassDetailScreen() {
   const router = useRouter();
+  const catalog = useCatalog();
   const turmaId = useRouteParam('turmaId');
 
   if (!turmaId) {
@@ -24,12 +26,19 @@ export function ClassDetailScreen() {
     );
   }
 
-  const details = previewSource.getClass(turmaId);
-  if (!details) return <MissingRecord title="Turma" />;
+  const details = catalog.getClass(turmaId);
+  if (!details) {
+    return (
+      <CatalogGate title="Turma" onBack={() => router.back()}>
+        <MissingRecord title="Turma" />
+      </CatalogGate>
+    );
+  }
 
   const percent = attendanceRate(details.presentRecords, details.expectedRecords);
 
   return (
+    <CatalogGate title="Turma" onBack={() => router.back()}>
     <Screen tone="brand" title={details.discipline} subtitle={`${details.period} · ${details.program}`} onBack={() => router.back()}>
       <Card>
         <FrequencyBar percent={percent} tone={frequencyTone(percent)} />
@@ -45,16 +54,31 @@ export function ClassDetailScreen() {
       <Button
         label="Área de chamada"
         icon="call"
-        onPress={() => router.push({ pathname: '/demo/professor/chamada/[turmaId]', params: { turmaId: details.id } })}
+        onPress={() => router.push(catalog.paths.call(details.id))}
       />
       <Button
         label="Lista de presença"
         variant="secondary"
-        onPress={() => router.push({ pathname: '/demo/professor/lista/[turmaId]', params: { turmaId: details.id } })}
+        onPress={() => router.push(catalog.paths.roster(details.id))}
       />
+      {(details.heldSessions ?? []).length > 0 ? (
+        <Card>
+          <AppText size="label">Chamadas desta turma</AppText>
+          {details.heldSessions?.map((session) => (
+            <InfoRow
+              key={session.id}
+              label={session.label}
+              value={session.status === 'aberta' ? 'Aberta' : `${session.presentCount} presentes`}
+            />
+          ))}
+        </Card>
+      ) : null}
       <AppText size="caption" tone="muted">
-        Os números acima vêm dos dados locais e não são atualizados por esta tela.
+        {catalog.mode === 'demo'
+          ? 'Os números acima vêm dos dados locais e não são atualizados por esta tela.'
+          : 'A frequência usa somente as chamadas encerradas. Uma chamada aberta ainda não gera falta.'}
       </AppText>
     </Screen>
+    </CatalogGate>
   );
 }

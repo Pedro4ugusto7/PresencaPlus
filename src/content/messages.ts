@@ -2,6 +2,19 @@
  * Textos de funcionalidades ainda não conectadas.
  * Nenhuma destas mensagens deve ser substituída por um sucesso falso.
  */
+export const connectionMessages = {
+  rejectedKey: 'A chave configurada não pode ser usada no aplicativo. Use a chave publicável.',
+  unconfigured: 'A conexão com o servidor ainda não está configurada neste aparelho.',
+  offline: 'Não foi possível conectar ao servidor. Verifique a internet e tente de novo.',
+  authFailed: 'Não foi possível entrar. Tente novamente.',
+  recoveryFailed: 'Não foi possível enviar a recuperação de senha.',
+  recoveryAccepted:
+    'O pedido foi aceito. Se o e-mail estiver cadastrado, as instruções chegam em seguida. Abra o link neste aparelho.',
+  needsProfile: 'Sua conta ainda não tem perfil acadêmico. Peça à instituição para concluir o cadastro.',
+  profileLoad: 'Não foi possível carregar o perfil desta conta.',
+  passwordChanged: 'Senha atualizada.',
+} as const;
+
 export const pendingMessages = {
   auth: 'A autenticação será conectada em uma etapa posterior. Nenhum acesso foi realizado.',
   recovery: 'O envio de e-mail será conectado posteriormente. Nenhuma mensagem foi enviada.',

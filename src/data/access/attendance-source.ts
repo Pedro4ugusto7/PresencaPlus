@@ -9,8 +9,8 @@ import type {
 } from '@/domain';
 
 /**
- * Contrato de leitura da área acadêmica.
- * A implementação atual é local. Uma fonte remota futura deve cumprir a mesma interface.
+ * Contrato síncrono da pré-visualização local.
+ * A conta real usa os mesmos tipos de domínio, carregados em src/data/remote.
  */
 export interface AttendanceSource {
   getProfile(role: UserRole): DemoProfile;

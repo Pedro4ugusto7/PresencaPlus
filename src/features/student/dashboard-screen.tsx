@@ -8,26 +8,40 @@ import { Notice } from '@/components/ui/notice';
 import { Screen } from '@/components/ui/screen';
 import { SectionHeader } from '@/components/ui/section-header';
 import { StatTile } from '@/components/ui/stat-tile';
-import { previewSource } from '@/data';
-import { attendanceRate, formatPercent, frequencyTone, MINIMUM_FREQUENCY, weightedAttendance } from '@/domain';
+import { EmptyState } from '@/components/ui/empty-state';
+import { attendanceRate, describeStudentCheckIn, formatPercent, frequencyTone, MINIMUM_FREQUENCY, weightedAttendance } from '@/domain';
+import { CheckInBanner } from '@/features/student/check-in-banner';
+import { CatalogGate } from '@/features/shared/catalog-gate';
 import { SubjectCard } from '@/features/student/subject-card';
+import { useCatalog } from '@/state/catalog';
 import { spacing } from '@/theme';
 
 export function StudentDashboardScreen() {
   const router = useRouter();
-  const profile = previewSource.getProfile('aluno');
-  const subjects = previewSource.listSubjects();
+  const catalog = useCatalog();
+  const profile = catalog.profile;
+  const subjects = catalog.subjects;
   const overall = weightedAttendance(subjects);
   const critical = subjects.filter(
     (subject) => frequencyTone(attendanceRate(subject.attended, subject.totalClasses)) === 'critical',
   );
   const openSubject = subjects.find((subject) => subject.hasOpenCall);
+  const openCheckIn = openSubject
+    ? describeStudentCheckIn({
+        discipline: openSubject.name,
+        current: openSubject.currentCall ?? null,
+        previous: openSubject.previousCall ?? null,
+      })
+    : null;
+
+  if (!profile) return <CatalogGate title="Início">{null}</CatalogGate>;
 
   return (
+    <CatalogGate title="Início">
     <Screen
       tone="brand"
       title={`Olá, ${profile.firstName}`}
-      subtitle={`${profile.course} · demonstração`}
+      subtitle={catalog.mode === 'demo' ? `${profile.course} · demonstração` : profile.course}
       safeBottom={false}>
       <View style={styles.stats}>
         <StatTile label="Frequência geral" value={formatPercent(overall)} hint="Aulas registradas" />
@@ -39,35 +53,43 @@ export function StudentDashboardScreen() {
           message={`Atenção: ${critical.map((subject) => subject.name).join(', ')} ${critical.length > 1 ? 'estão' : 'está'} abaixo de ${MINIMUM_FREQUENCY}%.`}
         />
       ) : null}
-      {openSubject ? (
+      {openSubject && openCheckIn ? (
         <Card>
           <AppText size="caption" tone="accent">
-            Chamada aberta
+            {openCheckIn.kind === 'confirmed' ? 'Presença confirmada' : 'Chamada aberta'}
           </AppText>
           <AppText size="heading">{openSubject.name}</AppText>
-          <AppText size="label" tone="muted">
-            {openSubject.nextClassLabel} · {openSubject.room}
-          </AppText>
+          {catalog.mode === 'live' && openCheckIn.kind === 'confirmed' ? <CheckInBanner view={openCheckIn} /> : (
+            <AppText size="label" tone="muted">
+              {openSubject.nextClassLabel} · {openSubject.room}
+            </AppText>
+          )}
           <Button
-            label="Ir para o registro"
-            onPress={() =>
-              router.push({
-                pathname: '/demo/aluno/registrar/[disciplinaId]',
-                params: { disciplinaId: openSubject.id },
-              })
-            }
+            label={catalog.mode === 'live' && !openCheckIn.actionsEnabled ? 'Ver presença' : 'Ir para o registro'}
+            onPress={() => router.push(catalog.paths.register(openSubject.id))}
           />
         </Card>
       ) : null}
       <SectionHeader
         title="Minhas disciplinas"
         actionLabel="Ver todas"
-        onAction={() => router.push('/demo/aluno/disciplinas')}
+        onAction={() => router.push(catalog.paths.studentSubjects)}
       />
-      {subjects.slice(0, 3).map((subject) => (
-        <SubjectCard key={subject.id} item={subject} />
-      ))}
+      {subjects.length === 0 ? (
+        <EmptyState
+          icon="subjects"
+          title="Nenhuma disciplina vinculada"
+          description={
+            catalog.mode === 'demo'
+              ? 'A pré-visualização não encontrou disciplinas locais.'
+              : 'Quando a instituição vincular matrículas a esta conta, elas aparecem aqui.'
+          }
+        />
+      ) : (
+        subjects.slice(0, 3).map((subject) => <SubjectCard key={subject.id} item={subject} />)
+      )}
     </Screen>
+    </CatalogGate>
   );
 }
 

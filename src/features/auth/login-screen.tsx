@@ -9,26 +9,44 @@ import { LogoMark } from '@/components/ui/logo-mark';
 import { Notice } from '@/components/ui/notice';
 import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
-import { pendingMessages } from '@/content/messages';
+import { connectionMessages } from '@/content/messages';
 import { useGoBack } from '@/navigation/use-go-back';
+import { toHref } from '@/navigation/area-paths';
+import { useAuth } from '@/state/auth-session';
 import { hitSlop, palette, spacing } from '@/theme';
 
 export function LoginScreen() {
   const router = useRouter();
   const goBack = useGoBack();
+  const auth = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState<string | undefined>();
   const [passwordError, setPasswordError] = useState<string | undefined>();
   const [notice, setNotice] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  function submit() {
+  async function submit() {
     const nextEmailError = email.trim().includes('@') ? undefined : 'Informe um e-mail institucional.';
     const nextPasswordError = password.length >= 6 ? undefined : 'Use ao menos 6 caracteres.';
     setEmailError(nextEmailError);
     setPasswordError(nextPasswordError);
-    setNotice(nextEmailError || nextPasswordError ? null : pendingMessages.auth);
+    if (nextEmailError || nextPasswordError) {
+      setNotice(null);
+      return;
+    }
+
+    setSubmitting(true);
+    const result = await auth.signIn(email, password);
+    setSubmitting(false);
+    if (!result.ok) {
+      setNotice(result.message);
+      return;
+    }
+    router.replace(result.role === 'professor' ? toHref('/professor') : toHref('/aluno'));
   }
+
+  const accountMessage = notice ?? auth.accountMessage;
 
   return (
     <Screen tone="plain" keyboard>
@@ -41,7 +59,7 @@ export function LoginScreen() {
         <LogoMark size={56} variant="onLight" />
         <AppText size="title">Entrar</AppText>
         <AppText size="label" tone="muted">
-          Use as credenciais que a instituição fornecer. O acesso real ainda não está conectado.
+          Use o e-mail e a senha fornecidos pela instituição.
         </AppText>
       </View>
       <TextField
@@ -75,13 +93,17 @@ export function LoginScreen() {
           Esqueci minha senha
         </AppText>
       </Pressable>
-      <Button label="Entrar" onPress={submit} accessibilityHint="Não realiza login nesta versão" />
-      {notice ? <Notice message={notice} /> : null}
+      <Button label={submitting ? 'Entrando…' : 'Entrar'} onPress={() => void submit()} disabled={submitting} />
+      {accountMessage ? <Notice message={accountMessage} tone="warning" /> : null}
+      {auth.status === 'needsProfile' || auth.status === 'profileError' ? (
+        <Button label="Sair da conta" variant="secondary" onPress={() => void auth.signOut()} />
+      ) : null}
+      {!auth.configured ? <Notice message={auth.setupIssue ?? connectionMessages.unconfigured} tone="warning" /> : null}
 
       <Card>
         <AppText size="heading">Modo demonstração</AppText>
         <AppText size="label" tone="muted">
-          Pré-visualize os dois perfis com dados locais. Isso não autentica e pode ser removido quando o acesso real existir.
+          Pré-visualize os dois perfis com dados locais. Isso não autentica e não usa a conta real.
         </AppText>
         <Button
           label="Pré-visualizar como professor"

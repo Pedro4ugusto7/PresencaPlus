@@ -7,13 +7,16 @@ import { AppText } from '@/components/ui/app-text';
 import { Notice } from '@/components/ui/notice';
 import { Screen } from '@/components/ui/screen';
 import { StatTile } from '@/components/ui/stat-tile';
+import { EmptyState } from '@/components/ui/empty-state';
 import { pendingMessages } from '@/content/messages';
-import { previewSource } from '@/data';
 import { attendanceRate, frequencyTone, MINIMUM_FREQUENCY } from '@/domain';
+import { CatalogGate } from '@/features/shared/catalog-gate';
+import { useCatalog } from '@/state/catalog';
 import { spacing } from '@/theme';
 
 export function ReportsScreen() {
-  const classes = previewSource.listClasses();
+  const catalog = useCatalog();
+  const classes = catalog.classes;
   const rates = classes.map((item) => ({
     item,
     percent: attendanceRate(item.presentRecords, item.expectedRecords),
@@ -22,17 +25,34 @@ export function ReportsScreen() {
   const below = rates.filter((rate) => rate.percent < MINIMUM_FREQUENCY);
 
   return (
-    <Screen tone="brand" title="Relatórios" subtitle="Indicadores locais de demonstração" safeBottom={false}>
+    <CatalogGate title="Relatórios">
+    <Screen
+      tone="brand"
+      title="Relatórios"
+      subtitle={catalog.mode === 'demo' ? 'Indicadores locais de demonstração' : 'Indicadores das suas turmas'}
+      safeBottom={false}>
       <View style={styles.stats}>
         <StatTile label="Frequência média" value={`${average}%`} />
         <StatTile label="Turmas abaixo de 75%" value={String(below.length)} />
       </View>
       <Card>
-        <AppText size="heading">Semana ilustrativa</AppText>
-        <BarChart
-          items={previewSource.weeklySample()}
-          caption="Exemplo calculado sobre os dados locais. Não é um relatório oficial."
-        />
+        <AppText size="heading">{catalog.mode === 'demo' ? 'Semana ilustrativa' : 'Semana'}</AppText>
+        {catalog.weekly.length === 0 ? (
+          <EmptyState
+            icon="reports"
+            title="Semana sem sessões"
+            description="O gráfico aparece quando houver sessões encerradas nesta conta."
+          />
+        ) : (
+          <BarChart
+            items={catalog.weekly}
+            caption={
+              catalog.mode === 'demo'
+                ? 'Exemplo calculado sobre os dados locais. Não é um relatório oficial.'
+                : 'Calculado sobre as sessões encerradas desta conta.'
+            }
+          />
+        )}
       </Card>
       <Card>
         <AppText size="heading">Frequência por turma</AppText>
@@ -51,6 +71,7 @@ export function ReportsScreen() {
       ) : null}
       <Notice message={pendingMessages.exportReports} />
     </Screen>
+    </CatalogGate>
   );
 }
 
