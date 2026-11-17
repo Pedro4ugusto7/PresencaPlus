@@ -43,3 +43,5 @@ example
 /ios
 /android
 supabase/.temp/
+
+.cursor/
