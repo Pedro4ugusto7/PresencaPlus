@@ -34,7 +34,7 @@ As migrações não rodam sozinhas. No SQL Editor do Supabase, execute o arquivo
 
 Esse é o arquivo definitivo desta primeira migração. Ele cria perfis, disciplinas, turmas, matrículas, sessões de chamada, frequência e justificativas, com RLS. Não apaga tabelas. O papel do perfil sai apenas de `app_metadata`, definido no painel, e não pode ser escolhido pelo aplicativo.
 
-Pelo aplicativo, a chamada nasce aberta. `code_expires_at` limita o código a 30 minutos; `ends_at` é o fim da aula, de no máximo 4 horas, e pode ficar vazio enquanto a chamada está aberta. Frequência comum só entra com a chamada aberta e o código ainda válido. O professor só pode encerrar a chamada. O vínculo com a turma permanece. A marca justificada acompanha a avaliação da justificativa. Correção fora dessas regras fica no SQL Editor, sem sessão do aplicativo. As funções auxiliares ficam no esquema `private`, fora da API.
+Pelo aplicativo, a chamada nasce aberta. Nesta primeira migração, `code_expires_at` aceita no máximo 30 minutos; a migração `20261118010000_check_in_forty_minutes.sql` eleva esse teto para 40 minutos nas chamadas novas, sem alterar as já gravadas. `ends_at` é o fim da aula, de no máximo 4 horas, e pode ficar vazio enquanto a chamada está aberta. Frequência comum só entra com a chamada aberta e o código ainda válido. O professor só pode encerrar a chamada. O vínculo com a turma permanece. A marca justificada acompanha a avaliação da justificativa. Correção fora dessas regras fica no SQL Editor, sem sessão do aplicativo. As funções auxiliares ficam no esquema `private`, fora da API.
 
 Execute este arquivo uma única vez. Não o rode de novo depois que as tabelas e as políticas existirem.
 
@@ -42,13 +42,35 @@ Depois que a migração inicial já estiver aplicada, execute uma única vez o a
 
 `supabase/migrations/20261116180000_attendance_confirmation.sql`
 
-Ele acrescenta a confirmação de presença pelo aluno e o encerramento que completa as faltas. Não apaga dados e não altera usuários. O aluno envia o identificador da sessão e o código de seis dígitos; o servidor usa somente a conta autenticada, confere matrícula, chamada aberta e validade, e grava a presença. O QR Code não substitui essa conferência.
+Ele acrescenta a confirmação de presença pelo aluno autenticado e o encerramento que completa as faltas. Não apaga dados e não altera usuários. Essa função antiga ainda recebe o identificador da sessão e um código interno de seis dígitos; o servidor usa somente a conta autenticada, confere matrícula, chamada aberta e validade, e grava a presença. O aplicativo do professor não mostra mais esse código. A presença do aluno sem conta é a página pública descrita mais abaixo.
 
 Depois das duas migrações anteriores, execute uma única vez:
 
 `supabase/migrations/20261117010000_one_call_per_academic_day.sql`
 
-Ela impede uma segunda chamada da mesma turma no mesmo dia em America/Sao_Paulo. Não apaga sessões. Se o índice falhar, há duas chamadas históricas da mesma turma no mesmo dia; a consulta comentada no arquivo lista esses casos. Não apague esses registros sem decisão da equipe.
+Ela impede uma segunda chamada da mesma oferta de disciplina no mesmo dia em America/Sao_Paulo. Disciplinas diferentes continuam podendo ter chamada no mesmo dia. Não apaga sessões. Se o índice falhar, há duas chamadas históricas da mesma turma no mesmo dia; a consulta comentada no arquivo lista esses casos. Não apague esses registros sem decisão da equipe.
+
+Depois das três migrações anteriores, revise e execute uma única vez:
+
+`supabase/migrations/20261117180000_academic_groups_and_roster.sql`
+
+Ela cria a turma acadêmica, como 5º Período, e o cadastro de alunos sem conta. A oferta de disciplina continua em `public.classes`. Ofertas já gravadas ficam sem turma acadêmica até o professor associá-las. O índice de uma chamada por oferta por dia permanece. Não apaga contas, chamadas nem presenças. Não execute este arquivo antes da revisão e não o rode de novo depois de aplicado.
+
+Depois da migração das turmas, execute uma única vez, no SQL Editor:
+
+`supabase/migrations/20261117220000_public_check_in.sql`
+
+Ela acrescenta o token do QR público e a confirmação do aluno sem conta. Não apaga chamadas nem presenças. O aluno autenticado antigo continua no fluxo anterior. anon não recebe INSERT em `attendance_records`. A matrícula não prova quem está segurando o celular.
+
+Depois dela, execute uma única vez:
+
+`supabase/migrations/20261118010000_check_in_forty_minutes.sql`
+
+Ela permite que uma chamada nova grave `code_expires_at` até 40 minutos depois do início. A confirmação pública continua usando esse horário gravado. Chamadas já abertas ou encerradas não são prorrogadas nem reabertas. A coluna `code` permanece por causa do gatilho e da restrição atuais; o aplicativo não mostra esse valor.
+
+Estas migrações novas não foram executadas por este ajuste. Não rode um arquivo de novo depois de aplicado.
+
+`supabase/tests/academic_roster.sql` cobre várias turmas, várias disciplinas, o mesmo aluno em mais de uma disciplina, matrícula repetida, isolamento entre professores e uma chamada por oferta no dia. Ele não foi executado no Supabase remoto. Não cole esse teste no projeto compartilhado: a transação cria usuários temporários e termina em `ROLLBACK`.
 
 `supabase/tests/attendance_confirmation.sql` cobre confirmação permitida, código errado, expiração, duplicidade, aluno sem matrícula, isolamento entre turmas e encerramento. Ele não foi executado no Supabase remoto. Não cole esse teste no projeto compartilhado: a transação cria usuários temporários e termina em `ROLLBACK`. O banco descartável precisa já ter a migração inicial.
 
@@ -73,6 +95,34 @@ select public.provision_profile('00000000-0000-0000-0000-000000000000');
 
 Sem perfil acadêmico, o login autentica no Supabase, mas o aplicativo não abre a área da conta.
 
+## Página pública e QR Code
+
+O professor continua abrindo uma chamada por oferta por dia, com validade de 40 minutos. O QR Code da câmera comum só aponta para uma URL HTTPS no formato `https://ENDERECO/presenca/TOKEN`. O token é aleatório e não leva matrícula nem senha. Enquanto `EXPO_PUBLIC_CHECK_IN_URL` estiver vazio, o aplicativo não desenha esse QR e avisa a configuração que falta. Não use localhost como endereço definitivo.
+
+A página pede só a matrícula. Quem confirma é a Edge Function `confirm-presence`, que chama `confirm_public_attendance` com a chave `service_role` guardada no Supabase. Essa chave não entra no aplicativo, no Git nem neste arquivo. A função está com `verify_jwt = false` porque o aluno não tem login; a conferência do token, da matrícula, da sessão e da matrícula na oferta fica no SQL.
+
+1. Aplique, nesta ordem e uma vez cada, `20261117220000_public_check_in.sql` e `20261118010000_check_in_forty_minutes.sql` no SQL Editor. Sem a segunda, o banco ainda recusa uma chamada nova com validade de 40 minutos.
+2. Publique a função, sem colocar a chave secreta no comando:
+
+```bash
+npx supabase functions deploy confirm-presence --no-verify-jwt
+```
+
+O projeto precisa estar ligado ao Supabase CLI. `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` são fornecidos pelo próprio Supabase à função. Não copie esses valores para o repositório.
+
+3. Exporte e publique a página com Expo Hosting. O `app.json` já usa `web.output` `server`, que o Expo Hosting aceita:
+
+```bash
+npx expo export --platform web
+npx eas-cli@latest deploy
+```
+
+4. Copie só a origem HTTPS que o comando mostrar, por exemplo o host sem caminho, para `EXPO_PUBLIC_CHECK_IN_URL` no `.env.local`.
+5. Rode `npx expo export --platform web` e `npx eas-cli@latest deploy` de novo, para a página publicada enxergar o Supabase. Reinicie o Expo Go para o QR do professor usar o mesmo endereço.
+6. Abra a chamada no aplicativo. O QR só deve aparecer depois desses passos. Escaneie com a câmera comum, não com o leitor interno do app. A página precisa responder em HTTPS antes de tratar esse teste como concluído.
+
+A matrícula não identifica a pessoa que está com o celular. Ela apenas localiza o aluno matriculado naquela oferta.
+
 ## Executar no Expo Go
 
 ```bash
@@ -82,15 +132,14 @@ npx expo start
 
 Abra o QR Code no Expo Go. O SDK do celular precisa ser o 58. Android e iOS usam o mesmo projeto.
 
-Para testar a câmera e o QR Code, a migração nova precisa já ter sido executada no Supabase e as duas contas precisam estar matriculadas na mesma turma.
+A chamada do professor continua no aplicativo. A presença do aluno sem conta só pode ser conferida na câmera comum depois que a página HTTPS estiver publicada, conforme a seção anterior.
 
-1. No iPhone ou no Android, entre com a conta do professor e abra a turma real.
-2. Em Área de chamada, toque em Abrir chamada. O código de seis dígitos e o QR Code aparecem na tela. A validade é de 10 minutos. Cada turma admite uma chamada por dia.
-3. Em outro celular, ou depois de sair e entrar com o aluno, abra a disciplina e toque em Escanear QR Code.
-4. Permita a câmera somente nesse momento. Aponte para o QR Code do professor. A presença confirmada aparece para o aluno, e a lista do professor passa de pendente para presente em alguns segundos.
-5. Se a câmera for negada, use Abrir configurações ou digite os seis dígitos e confirme.
-6. O professor toca em Encerrar chamada. Quem não confirmou passa a falta. A frequência da turma usa só as chamadas encerradas.
-7. O modo demonstração continua local e não grava essa confirmação.
+1. No iPhone ou no Android, entre com a conta do professor e abra a oferta real.
+2. Em Área de chamada, toque em Abrir chamada. O professor vê o QR Code, o tempo restante e o horário em que ele vence. Não há código numérico na tela. A validade é de 40 minutos. Cada oferta admite uma chamada por dia.
+3. Se o endereço público ainda não estiver configurado, o espaço do QR explica a configuração e não finge um código que a câmera abre.
+4. Com a página publicada, aponte a câmera comum do celular para o QR. Informe a matrícula na página. A confirmação cita o nome e a disciplina.
+5. O professor toca em Encerrar chamada. Quem não confirmou passa a falta. A frequência da turma usa só as chamadas encerradas.
+6. O modo demonstração continua local e não grava essa confirmação.
 
 Para checar o código:
 

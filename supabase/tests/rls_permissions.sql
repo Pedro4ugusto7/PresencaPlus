@@ -410,14 +410,14 @@ begin
     values (
       'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
       now(),
-      now() + interval '31 minutes',
+      now() + interval '41 minutes',
       'aberta',
       '246801'
     );
-    raise exception 'FALHA: o código ficou válido por mais de 30 minutos';
+    raise exception 'FALHA: o código ficou válido por mais de 40 minutos';
   exception
     when raise_exception then
-      if sqlerrm = 'FALHA: o código ficou válido por mais de 30 minutos' then
+      if sqlerrm = 'FALHA: o código ficou válido por mais de 40 minutos' then
         raise;
       elsif sqlerrm is distinct from 'a validade do código excede o período permitido' then
         raise exception 'erro inesperado no prazo do código: %', sqlerrm;

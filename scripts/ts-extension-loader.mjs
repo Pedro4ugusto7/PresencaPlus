@@ -1,6 +1,10 @@
 export async function resolve(specifier, context, nextResolve) {
   if ((specifier.startsWith('./') || specifier.startsWith('../')) && !/\.[a-z]+$/i.test(specifier)) {
-    return nextResolve(`${specifier}.ts`, context);
+    try {
+      return await nextResolve(`${specifier}.js`, context);
+    } catch {
+      return nextResolve(`${specifier}.jsx`, context);
+    }
   }
   return nextResolve(specifier, context);
 }

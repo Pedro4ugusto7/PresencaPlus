@@ -1,0 +1,5 @@
+# A página pública não tem JWT de aluno.
+# O token da chamada, a matrícula e a sessão são conferidos na função SQL.
+[functions.confirm-presence]
+verify_jwt = false
+entrypoint = "./functions/confirm-presence/index.js"
