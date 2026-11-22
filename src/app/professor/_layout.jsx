@@ -1,5 +1,6 @@
 import { Redirect, Stack } from 'expo-router';
 import { LoadingState } from '@/components/ui/loading-state';
+import { ProfessorShell } from '@/components/ui/professor-shell';
 import { Screen } from '@/components/ui/screen';
 import { useAuth } from '@/state/auth-session';
 import { LiveCatalogProvider } from '@/state/catalog';
@@ -22,11 +23,13 @@ export default function ProfessorLayout() {
     return <Redirect href={toHref('/login')} />;
   }
   return <LiveCatalogProvider>
-      <Stack screenOptions={{
-      headerShown: false,
-      contentStyle: {
-        backgroundColor: palette.background
-      }
-    }} />
+      <ProfessorShell area="live">
+        <Stack screenOptions={{
+        headerShown: false,
+        contentStyle: {
+          backgroundColor: palette.background
+        }
+      }} />
+      </ProfessorShell>
     </LiveCatalogProvider>;
 }

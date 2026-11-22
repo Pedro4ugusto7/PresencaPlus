@@ -45,3 +45,15 @@ export async function submitPublicCheckIn(token, registration) {
   }
   return data;
 }
+
+export async function submitPublicAttendanceCode(token, code) {
+  const data = await post({ action: 'confirm', token, code });
+  if (data.result === 'presente' && data.message) return data;
+  if (data.result === 'duplicada' && !data.message && data.name && data.subject) {
+    return { ...data, message: duplicateMessage(data.name, data.subject) };
+  }
+  if (data.result === 'presente' && !data.message && data.name && data.subject) {
+    return { ...data, ok: true, message: confirmationMessage(data.name, data.subject) };
+  }
+  return data;
+}

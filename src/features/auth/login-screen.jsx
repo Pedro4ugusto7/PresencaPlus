@@ -42,7 +42,7 @@ export function LoginScreen() {
     router.replace(toHref('/professor'));
   }
   const accountMessage = notice ?? auth.accountMessage;
-  return <Screen tone="plain" keyboard>
+  return <Screen tone="plain" keyboard notice={accountMessage} noticeTone="warning">
       <Pressable accessibilityRole="button" accessibilityLabel="Voltar" hitSlop={hitSlop} onPress={goBack}>
         <AppText size="label" tone="accent">
           Voltar
@@ -63,7 +63,6 @@ export function LoginScreen() {
         </AppText>
       </Pressable>
       <Button label={submitting ? 'Entrando…' : 'Entrar'} onPress={() => void submit()} disabled={submitting} />
-      {accountMessage ? <Notice message={accountMessage} tone="warning" /> : null}
       {auth.status === 'needsProfile' || auth.status === 'profileError' ? <Button label="Sair da conta" variant="secondary" onPress={() => void auth.signOut()} /> : null}
       {!auth.configured ? <Notice message={auth.setupIssue ?? connectionMessages.unconfigured} tone="warning" /> : null}
 

@@ -15,7 +15,7 @@ export function ClassesScreen() {
   const live = catalog.mode === 'live';
   useFocusEffect(useCallback(() => {
     if (!live) return undefined;
-    reload(true);
+    reload({ silent: true, minAgeMs: 20000 });
   }, [live, reload]));
   const visible = useMemo(() => classes.filter(item => matchesSearch(query, item.discipline, item.groupName ?? '', item.program, item.room, item.period)), [classes, query]);
   return <CatalogGate title="Minhas turmas">

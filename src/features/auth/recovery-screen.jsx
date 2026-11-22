@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { Pressable } from 'react-native';
 import { AppText } from '@/components/ui/app-text';
 import { Button } from '@/components/ui/button';
-import { Notice } from '@/components/ui/notice';
 import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
 import { connectionMessages } from '@/content/messages';
@@ -37,7 +36,7 @@ export function RecoveryScreen() {
     setNoticeTone('info');
     setNotice(connectionMessages.recoveryAccepted);
   }
-  return <Screen tone="plain" keyboard>
+  return <Screen tone="plain" keyboard notice={notice} noticeTone={noticeTone}>
       <Pressable accessibilityRole="button" accessibilityLabel="Voltar" hitSlop={hitSlop} onPress={goBack}>
         <AppText size="label" tone="accent">
           Voltar
@@ -54,6 +53,5 @@ export function RecoveryScreen() {
         Endereço de retorno deste aparelho: {redirectTo}
       </AppText>
       <Button label={submitting ? 'Enviando…' : 'Enviar instruções'} onPress={() => void submit()} disabled={submitting} />
-      {notice ? <Notice message={notice} tone={noticeTone} /> : null}
     </Screen>;
 }

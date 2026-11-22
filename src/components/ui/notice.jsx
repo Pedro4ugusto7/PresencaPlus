@@ -1,4 +1,5 @@
 import { StyleSheet, View } from 'react-native';
+import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
 import { palette, radius, spacing } from '@/theme';
 const tones = {
@@ -23,16 +24,23 @@ const tones = {
     text: 'present'
   }
 };
+const icons = {
+  info: 'info',
+  warning: 'warning',
+  demo: 'info',
+  success: 'check'
+};
 export function Notice({
   message,
   tone = 'info'
 }) {
-  const colors = tones[tone];
-  return <View accessibilityRole="text" style={[styles.box, {
+  const colors = tones[tone] ?? tones.info;
+  return <View accessibilityRole={tone === 'info' || tone === 'demo' ? 'text' : 'alert'} style={[styles.box, {
     backgroundColor: colors.background,
     borderColor: colors.border
   }]}>
-      <AppText size="label" tone={colors.text}>
+      <AppIcon name={icons[tone] ?? 'info'} color={palette[colors.text === 'accent' ? 'accent' : colors.text] ?? palette.accent} size={18} />
+      <AppText size="label" tone={colors.text} style={styles.message}>
         {message}
       </AppText>
     </View>;
@@ -41,6 +49,12 @@ const styles = StyleSheet.create({
   box: {
     borderRadius: radius.md,
     borderWidth: 1,
-    padding: spacing.md
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm
+  },
+  message: {
+    flex: 1
   }
 });

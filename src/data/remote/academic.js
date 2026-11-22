@@ -1,4 +1,5 @@
-import { attendanceRate, isAcademicToday } from '@/domain';
+import { academicWeekday, attendanceRate, formatAcademicDay, isAcademicToday, markCountsAsPresence } from '@/domain';
+import { normalizeReportSource } from '@/domain/reports';
 import { classCalledOnAcademicDay, displayName } from '@/domain/session-policy';
 import { ensureCheckInToken } from '@/data/remote/attendance-ops';
 import { getSupabase } from '@/data/remote/client';
@@ -49,9 +50,6 @@ function one(value) {
 function many(value) {
   return value ?? [];
 }
-function countsAsPresence(mark) {
-  return mark === 'presente' || mark === 'justificada';
-}
 function closedSessions(sessions) {
   return sessions.filter(session => session.status === 'encerrada');
 }
@@ -73,16 +71,22 @@ function sessionValidLabel(session) {
   if (!session.ends_at) return 'Chamada aberta';
   return `Válido até ${formatClock(session.ends_at)}`;
 }
-function summarize(sessions, enrolled) {
+function summarizeSessions(sessions, people) {
   const closed = closedSessions(sessions);
-  const presentRecords = closed.reduce((sum, session) => {
-    const present = many(session.records).filter(record => countsAsPresence(record.mark)).length;
-    return sum + present;
-  }, 0);
-  return {
-    presentRecords,
-    expectedRecords: closed.length * enrolled
-  };
+  let presentRecords = 0;
+  let expectedRecords = 0;
+  closed.forEach(session => {
+    const recorded = new Set(many(session.records).map(record => record.roster_student_id || record.student_id).filter(Boolean));
+    const roster = people.filter(person => person && (person.active !== false || recorded.has(person.id)));
+    many(session.records).forEach(record => {
+      const personId = record.roster_student_id || record.student_id;
+      if (!roster.some(person => person.id === personId)) return;
+      if (record.mark !== 'presente' && record.mark !== 'falta' && record.mark !== 'justificada') return;
+      expectedRecords += 1;
+      if (record.mark === 'presente') presentRecords += 1;
+    });
+  });
+  return { presentRecords, expectedRecords };
 }
 function readableName(value) {
   if (typeof value !== 'string') return 'Aluno sem nome';
@@ -116,13 +120,42 @@ async function selectByIds(supabase, table, columns, column, ids) {
   if (error) throw new Error(explainQueryFailure(error));
   return data ?? [];
 }
+async function selectEnrollments(supabase, classIds) {
+  if (!classIds.length) return [];
+  const rich = await supabase.from('enrollments').select('id, class_id, student_id, roster_student_id, withdrawn_at').in('class_id', classIds);
+  if (!rich.error) return rich.data ?? [];
+  const detail = `${rich.error.message ?? ''}`.toLowerCase();
+  if (!detail.includes('withdrawn_at')) throw new Error(explainQueryFailure(rich.error));
+  const plain = await supabase.from('enrollments').select('id, class_id, student_id, roster_student_id').in('class_id', classIds);
+  if (plain.error) throw new Error(explainQueryFailure(plain.error));
+  return plain.data ?? [];
+}
+async function selectJustifications(supabase, recordIds) {
+  if (!recordIds.length) return [];
+  const {
+    data,
+    error
+  } = await supabase.from('absence_justifications').select('id, attendance_record_id, reason, status').in('attendance_record_id', recordIds);
+  if (error) return [];
+  return data ?? [];
+}
+async function settleExpiredCalls(supabase) {
+  const {
+    error
+  } = await supabase.rpc('settle_expired_calls');
+  if (!error) return;
+  const detail = `${error.message ?? ''} ${error.code ?? ''}`.toLowerCase();
+  if (detail.includes('settle_expired_calls') || detail.includes('pgrst202') || detail.includes('could not find')) return;
+}
 function personFromEnrollment(enrollment, profiles, rosterStudents) {
+  const active = enrollment.withdrawn_at == null;
   if (enrollment.student_id) {
     return {
       id: enrollment.student_id,
       name: readableName(profiles.get(enrollment.student_id)?.full_name),
       registrationCode: null,
-      roster: false
+      roster: false,
+      active
     };
   }
   if (!enrollment.roster_student_id) return null;
@@ -132,37 +165,50 @@ function personFromEnrollment(enrollment, profiles, rosterStudents) {
     id: enrollment.roster_student_id,
     name: readableName(rosterStudent?.full_name),
     registrationCode: registrationCode || null,
-    roster: true
+    roster: true,
+    active
   };
 }
-function roster(people, sessions) {
-  const current = openSession(sessions);
-  const latestClosed = closedSessions(sessions).sort((left, right) => new Date(right.starts_at).getTime() - new Date(left.starts_at).getTime())[0];
-  const source = current ?? latestClosed ?? null;
-  const records = many(source?.records);
-  const students = people.filter(student => student != null).map(student => {
+function peopleForSession(people, session) {
+  const active = people.filter(person => person?.active !== false);
+  if (!session || session.status === 'aberta') return active;
+  const recorded = new Set(many(session.records).map(record => record.roster_student_id || record.student_id).filter(Boolean));
+  const previous = people.filter(person => person?.active === false && recorded.has(person.id));
+  return [...active, ...previous];
+}
+function sessionRoster(people, session, reasons) {
+  const records = many(session?.records);
+  const open = session?.status === 'aberta';
+  const students = peopleForSession(people, session).map(student => {
     const record = records.find(item => student.roster ? item.roster_student_id === student.id : item.student_id === student.id);
-    const waiting = current != null && !record;
+    const waiting = open && !record;
+    const justification = record ? reasons.get(record.id) : null;
+    const accepted = justification?.status === 'aceita';
     return {
       id: student.id,
+      roster: student.roster === true,
+      active: student.active !== false,
       name: student.name,
       registrationCode: student.registrationCode ?? null,
-      mark: record?.mark ?? 'falta',
-      timeLabel: record ? formatClock(record.recorded_at) : waiting ? 'Aguardando' : '—',
-      pending: waiting
+      mark: record?.mark ?? null,
+      timeLabel: record ? formatClock(record.recorded_at) : waiting ? 'Aguardando' : 'Sem registro',
+      pending: waiting,
+      unrecorded: Boolean(session) && !open && !record,
+      recordId: record?.id ?? null,
+      reason: accepted ? justification.reason ?? null : null
     };
   }).sort((left, right) => left.name.localeCompare(right.name, 'pt-BR'));
   return {
     students,
-    rosterPending: source == null
+    rosterPending: session == null
   };
 }
 function weeklyFrom(classes) {
   const sessions = classes.flatMap(item => many(item.sessions));
   const days = weekLabels.map((label, index) => {
     const weekday = index + 1;
-    const records = closedSessions(sessions).filter(session => new Date(session.starts_at).getDay() === weekday).flatMap(session => many(session.records));
-    const present = records.filter(record => countsAsPresence(record.mark)).length;
+    const records = closedSessions(sessions).filter(session => academicWeekday(session.starts_at) === weekday).flatMap(session => many(session.records)).filter(record => record.mark === 'presente' || record.mark === 'falta' || record.mark === 'justificada');
+    const present = records.filter(record => markCountsAsPresence(record.mark)).length;
     return {
       label,
       percent: attendanceRate(present, records.length)
@@ -194,14 +240,15 @@ export async function loadProfessorWorkspace() {
   const supabase = getSupabase();
   if (!supabase) throw new Error('A conexão com o servidor ainda não está configurada neste aparelho.');
   const {
-    data: authData,
-    error: authError
-  } = await supabase.auth.getUser();
-  if (authError || !authData.user) throw new Error('Entre novamente para continuar.');
+    data: authData
+  } = await supabase.auth.getSession();
+  const userId = authData.session?.user?.id;
+  if (!userId) throw new Error('Entre novamente para continuar.');
+  await settleExpiredCalls(supabase);
   const {
     data,
     error
-  } = await supabase.from('classes').select('id, subject_id, academic_group_id, period, schedule, room').eq('professor_id', authData.user.id);
+  } = await supabase.from('classes').select('id, subject_id, academic_group_id, period, schedule, room').eq('professor_id', userId);
   if (error) throw new Error(explainQueryFailure(error));
   const classRows = data ?? [];
   const classIds = classRows.map(row => row.id);
@@ -211,7 +258,7 @@ export async function loadProfessorWorkspace() {
     selectByIds(supabase, 'subjects', 'id, name, program', 'id', subjectIds),
     selectByIds(supabase, 'academic_groups', 'id, name', 'id', groupIds),
     selectByIds(supabase, 'class_sessions', 'id, class_id, starts_at, ends_at, code_expires_at, status', 'class_id', classIds),
-    selectByIds(supabase, 'enrollments', 'id, class_id, student_id, roster_student_id', 'class_id', classIds)
+    selectEnrollments(supabase, classIds)
   ]);
   const sessionIds = sessions.map(row => row.id);
   const profileIds = [...new Set(enrollments.map(row => row.student_id).filter(Boolean))];
@@ -221,6 +268,7 @@ export async function loadProfessorWorkspace() {
     selectByIds(supabase, 'profiles', 'id, full_name', 'id', profileIds),
     selectByIds(supabase, 'roster_students', 'id, full_name, registration_code', 'id', rosterIds)
   ]);
+  const justifications = await selectJustifications(supabase, (records ?? []).map(row => row.id));
   const subjectsById = indexById(subjects);
   const groupsById = indexById(groups);
   const profilesById = indexById(profiles);
@@ -252,43 +300,73 @@ export async function loadProfessorWorkspace() {
       expiresAt: session.code_expires_at
     } : null;
   }).filter(item => item != null);
+  const reasons = new Map();
+  justifications.forEach(row => {
+    if (row?.attendance_record_id) reasons.set(row.attendance_record_id, row);
+  });
   const tokens = await openCodes(opened);
   const classDetails = {};
   const classes = rows.map(row => {
     const subject = row.subject;
     const sessions = many(row.sessions);
     const enrollments = many(row.enrollments);
+    const people = enrollments.map(enrollment => personFromEnrollment(enrollment, profilesById, rosterById)).filter(Boolean);
+    const activePeople = people.filter(person => person.active !== false);
     const openedSession = openSession(sessions);
-    const totals = summarize(sessions, enrollments.length);
-    const people = roster(enrollments.map(enrollment => personFromEnrollment(enrollment, profilesById, rosterById)), sessions);
-    const heldSessions = [...sessions].sort((left, right) => new Date(right.starts_at).getTime() - new Date(left.starts_at).getTime()).map(session => ({
+    const latestClosed = closedSessions(sessions).sort((left, right) => new Date(right.starts_at).getTime() - new Date(left.starts_at).getTime())[0] ?? null;
+    const currentSession = openedSession ?? latestClosed;
+    const totals = summarizeSessions(sessions, people);
+    const currentRoster = sessionRoster(people, currentSession, reasons);
+    const sessionHistory = [...sessions].sort((left, right) => new Date(right.starts_at).getTime() - new Date(left.starts_at).getTime()).map(session => {
+      const roster = sessionRoster(people, session, reasons);
+      const counts = roster.students.reduce((sum, student) => {
+        if (student.pending) sum.pending += 1;
+        else if (student.mark === 'presente' || student.mark === 'falta' || student.mark === 'justificada') sum[student.mark] += 1;
+        else sum.unrecorded += 1;
+        return sum;
+      }, { presente: 0, falta: 0, justificada: 0, pending: 0, unrecorded: 0 });
+      return {
+        id: session.id,
+        startsAt: session.starts_at,
+        dateLabel: formatAcademicDay(session.starts_at),
+        timeLabel: formatClock(session.starts_at),
+        status: session.status,
+        current: openedSession?.id === session.id,
+        students: roster.students,
+        counts
+      };
+    });
+    const heldSessions = sessionHistory.map(session => ({
       id: session.id,
-      label: `${dateFormatter.format(new Date(session.starts_at))} · ${formatClock(session.starts_at)}`,
+      label: `${session.dateLabel} · ${session.timeLabel}`,
       status: session.status,
-      presentCount: many(session.records).filter(record => countsAsPresence(record.mark)).length
+      presentCount: session.counts.presente
     }));
     const details = {
       id: row.id,
       discipline: subject?.name ?? 'Disciplina',
       program: subject?.program ?? '',
       groupName: row.academic_group?.name ?? null,
+      groupId: row.academic_group_id ?? null,
       period: row.period,
       schedule: row.schedule,
       room: row.room,
-      enrolled: enrollments.length,
+      enrolled: activePeople.length,
       presentRecords: totals.presentRecords,
       expectedRecords: totals.expectedRecords,
       nextClassLabel: nextClassLabel(openedSession?.starts_at ?? null, row.schedule),
       hasOpenCall: openedSession != null,
-      students: people.students,
+      students: currentRoster.students,
+      sessionDateLabel: currentSession ? formatAcademicDay(currentSession.starts_at) : null,
       sessionCode: null,
       checkInToken: tokens.get(row.id) ?? null,
       codeExpiresAt: openedSession?.code_expires_at ?? null,
       sessionValidLabel: sessionValidLabel(openedSession),
       openSessionId: openedSession?.id ?? null,
       heldSessions,
+      sessionHistory,
       calledToday: classCalledOnAcademicDay(sessions.map(session => session.starts_at)),
-      rosterPending: people.rosterPending
+      rosterPending: currentRoster.rosterPending
     };
     classDetails[row.id] = details;
     return {
@@ -306,10 +384,40 @@ export async function loadProfessorWorkspace() {
       hasOpenCall: details.hasOpenCall
     };
   });
+  const reportSource = normalizeReportSource(rows.map(row => ({
+    id: row.id,
+    discipline: row.subject?.name ?? 'Disciplina',
+    groupName: row.academic_group?.name ?? '',
+    period: row.period ?? '',
+    program: row.subject?.program ?? '',
+    sessions: many(row.sessions).map(session => ({
+      id: session.id,
+      startsAt: session.starts_at,
+      status: session.status,
+      records: many(session.records).map(record => ({
+        id: record.id,
+        studentId: record.student_id ?? null,
+        rosterStudentId: record.roster_student_id ?? null,
+        mark: record.mark
+      }))
+    })),
+    enrollments: many(row.enrollments).map(enrollment => {
+      const person = personFromEnrollment(enrollment, profilesById, rosterById);
+      if (!person) return null;
+      return {
+        studentId: enrollment.student_id ?? null,
+        rosterStudentId: enrollment.roster_student_id ?? null,
+        name: person.name,
+        registrationCode: person.registrationCode ?? null,
+        active: person.active !== false
+      };
+    }).filter(Boolean)
+  })));
   return {
     classes,
     classDetails,
-    weekly: weeklyFrom(rows)
+    weekly: weeklyFrom(rows),
+    reportSource
   };
 }
 function ownMark(session, userId) {
@@ -348,7 +456,7 @@ export async function loadStudentWorkspace(userId) {
     const current = opened ?? latest;
     const previous = ordered.find(session => session.id !== current?.id && ownMark(session, userId) != null) ?? null;
     const ownRecords = closed.flatMap(session => many(session.records).filter(record => record.student_id === userId));
-    const attended = ownRecords.filter(record => countsAsPresence(record.mark)).length;
+    const attended = ownRecords.filter(record => markCountsAsPresence(record.mark)).length;
     const subjectView = {
       id: item.id,
       name: subject?.name ?? 'Disciplina',

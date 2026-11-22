@@ -4,6 +4,9 @@ export function attendanceRate(present, total) {
   if (total <= 0) return 0;
   return Math.round(present / total * 100);
 }
+export function markCountsAsPresence(mark) {
+  return mark === 'presente';
+}
 export function frequencyTone(percent) {
   if (percent >= 85) return 'good';
   if (percent >= MINIMUM_FREQUENCY) return 'warning';
@@ -19,7 +22,9 @@ export function formatSessionCode(code) {
 }
 export function countMarks(entries) {
   return entries.reduce((totals, entry) => {
-    totals[entry.mark] += 1;
+    if (entry.mark === 'presente' || entry.mark === 'falta' || entry.mark === 'justificada') {
+      totals[entry.mark] += 1;
+    }
     return totals;
   }, {
     presente: 0,

@@ -16,7 +16,7 @@ const links = [{
 
 export function AcademicHubScreen() {
   const router = useRouter();
-  return <Screen tone="brand" title="Gestão acadêmica" subtitle="Turmas, disciplinas e alunos desta conta" onBack={() => router.back()}>
+  return <Screen tone="brand" title="Gestão acadêmica" subtitle="Turmas, disciplinas e alunos desta conta" onBack={() => router.back()} safeBottom={false}>
       <AppText size="label" tone="muted">
         O aluno não entra neste aplicativo. A matrícula daqui serve depois para a confirmação pela página da chamada.
       </AppText>

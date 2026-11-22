@@ -5,7 +5,6 @@ import { Card } from '@/components/ui/card';
 import { AppText } from '@/components/ui/app-text';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
-import { Notice } from '@/components/ui/notice';
 import { Screen } from '@/components/ui/screen';
 import { SearchField } from '@/components/ui/search-field';
 import { TextField } from '@/components/ui/text-field';
@@ -62,15 +61,15 @@ export function AcademicStudentsScreen() {
     await reload();
   }
 
-  return <Screen tone="brand" title="Alunos" subtitle="Cadastro desta conta, sem senha" onBack={() => router.back()} keyboard>
+  return <Screen tone="brand" title="Alunos" subtitle="Cadastro desta conta, sem senha" onBack={() => router.back()} keyboard safeBottom={false} notice={notice} noticeTone={noticeTone} onNoticeDismiss={() => setNotice(null)}>
       <TextField label="Nome completo" value={fullName} onChangeText={setFullName} placeholder="João Pedro Silva" maxLength={160} error={formError} />
       <TextField label="Matrícula" value={registration} onChangeText={setRegistration} placeholder="202600123" autoCapitalize="none" maxLength={40} />
       <Button label={saving ? 'Salvando…' : 'Cadastrar aluno'} onPress={() => void save()} disabled={saving} />
-      {notice ? <Notice message={notice} tone={noticeTone} /> : null}
       <SearchField value={query} onChangeText={setQuery} placeholder="Buscar nome ou matrícula" />
-      {loading ? <LoadingState message="Carregando alunos…" /> : visible.length === 0 ? <EmptyState icon="profile" title="Nenhum aluno encontrado" description="Cadastre um aluno ou limpe a busca. A matrícula não se repete nesta conta." /> : visible.map(student => <Card key={student.id} accessibilityLabel={student.full_name} onPress={() => router.push(toHref('/professor/gestao/alunos/[alunoId]', { alunoId: student.id }))}>
+      {loading ? <LoadingState message="Carregando alunos…" /> : visible.length === 0 ? <EmptyState icon="profile" title="Nenhum aluno encontrado" description="Cadastre um aluno ou limpe a busca. A matrícula não se repete nesta conta." /> : visible.map(student => <Card key={student.id} accessibilityLabel={`Editar aluno ${student.full_name}`} onPress={() => router.push(toHref('/professor/gestao/alunos/[alunoId]', { alunoId: student.id }))}>
           <AppText size="heading">{student.full_name}</AppText>
           <AppText size="label" tone="muted">Matrícula {student.registration_code}</AppText>
+          <AppText size="caption" tone="accent">Editar aluno</AppText>
         </Card>)}
     </Screen>;
 }

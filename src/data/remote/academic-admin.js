@@ -17,9 +17,9 @@ function one(value) {
 async function requireProfessor() {
   const supabase = getSupabase();
   if (!supabase) return { supabase: null, userId: null, message: connectionMessages.unconfigured };
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) return { supabase, userId: null, message: 'Entre novamente para continuar.' };
-  return { supabase, userId: data.user.id, message: null };
+  const { data } = await supabase.auth.getSession();
+  if (!data.session?.user) return { supabase, userId: null, message: 'Entre novamente para continuar.' };
+  return { supabase, userId: data.session.user.id, message: null };
 }
 
 function offeringFrom(row) {
@@ -39,13 +39,17 @@ function offeringFrom(row) {
 export async function loadAcademicCatalog() {
   const ready = await requireProfessor();
   if (!ready.supabase) return { ok: false, message: ready.message };
-  const [groups, subjects, classes, students, enrollments] = await Promise.all([
+  const [groups, subjects, classes, students, enrollmentResult] = await Promise.all([
     ready.supabase.from('academic_groups').select('id, name').order('name'),
     ready.supabase.from('subjects').select('id, name, program').order('name'),
     ready.supabase.from('classes').select('id, subject_id, academic_group_id, period, schedule, room, subject:subjects(id, name, program)').order('period'),
     ready.supabase.from('roster_students').select('id, full_name, registration_code').order('full_name'),
-    ready.supabase.from('enrollments').select('id, class_id, roster_student_id').not('roster_student_id', 'is', null)
+    ready.supabase.from('enrollments').select('id, class_id, roster_student_id, withdrawn_at').not('roster_student_id', 'is', null)
   ]);
+  let enrollments = enrollmentResult;
+  if (enrollments.error && `${enrollments.error.message ?? ''}`.toLowerCase().includes('withdrawn_at')) {
+    enrollments = await ready.supabase.from('enrollments').select('id, class_id, roster_student_id').not('roster_student_id', 'is', null);
+  }
   const failed = [groups, subjects, classes, students, enrollments].find(result => result.error);
   if (failed) return { ok: false, message: explain(failed.error, 'Não foi possível carregar os cadastros.') };
   return {
@@ -54,7 +58,7 @@ export async function loadAcademicCatalog() {
     subjects: subjects.data ?? [],
     offerings: (classes.data ?? []).map(offeringFrom),
     students: students.data ?? [],
-    enrollments: enrollments.data ?? []
+    enrollments: (enrollments.data ?? []).filter(row => row.withdrawn_at == null)
   };
 }
 
@@ -138,4 +142,65 @@ export async function enrollRosterStudent(classId, studentId) {
   });
   if (error) return { ok: false, message: explain(error, 'O aluno já está nesta disciplina.') };
   return { ok: true, message: 'Aluno matriculado na disciplina.' };
+}
+
+function missingRpc(error, name) {
+  const detail = `${error?.message ?? ''} ${error?.code ?? ''} ${error?.details ?? ''}`.toLowerCase();
+  return detail.includes(name.toLowerCase()) || detail.includes('pgrst202') || detail.includes('could not find');
+}
+
+async function professorRpc(name, args, unavailable) {
+  const ready = await requireProfessor();
+  if (!ready.userId) return { ok: false, message: ready.message };
+  const { data, error } = await ready.supabase.rpc(name, args);
+  if (error) {
+    if (missingRpc(error, name)) return { ok: false, message: unavailable };
+    return { ok: false, message: explain(error, 'Não foi possível concluir. Tente novamente.') };
+  }
+  if (data && typeof data === 'object' && data.ok === false) {
+    return { ok: false, message: typeof data.message === 'string' ? data.message : 'Não foi possível concluir. Tente novamente.' };
+  }
+  return { ok: true, message: typeof data?.message === 'string' ? data.message : 'Alteração salva.' };
+}
+
+export async function updateOffering(classId, fields) {
+  const ready = await requireProfessor();
+  if (!ready.userId) return { ok: false, message: ready.message };
+  const { data, error } = await ready.supabase.from('classes').update({
+    period: fields.period,
+    schedule: fields.schedule,
+    room: fields.room
+  }).eq('id', classId).eq('professor_id', ready.userId).select('id');
+  if (error) {
+    if (error.code === '42501') return { ok: false, message: 'A edição da turma fica disponível depois da atualização do servidor.' };
+    return { ok: false, message: explain(error, 'Esta disciplina já está nesta turma neste período.') };
+  }
+  if (!data?.length) return { ok: false, message: 'Turma não encontrada.' };
+  return { ok: true, message: 'Turma atualizada.' };
+}
+
+export async function enrollRosterStudentSecure(classId, studentId) {
+  const ready = await requireProfessor();
+  if (!ready.userId) return { ok: false, message: ready.message };
+  const rpc = await ready.supabase.rpc('enroll_roster_student', { target_class: classId, target_student: studentId });
+  if (!rpc.error) {
+    if (rpc.data?.ok === false) return { ok: false, message: rpc.data.message || 'O aluno já está nesta disciplina.' };
+    return { ok: true, message: rpc.data?.message || 'Aluno matriculado na disciplina.' };
+  }
+  if (!missingRpc(rpc.error, 'enroll_roster_student')) {
+    return { ok: false, message: explain(rpc.error, 'O aluno já está nesta disciplina.') };
+  }
+  return enrollRosterStudent(classId, studentId);
+}
+
+export function withdrawRosterEnrollment(classId, studentId) {
+  return professorRpc('withdraw_roster_enrollment', { target_class: classId, target_student: studentId }, 'A desmatrícula fica disponível depois da atualização do servidor.');
+}
+
+export function justifyClosedAbsence(recordId, note) {
+  return professorRpc('justify_closed_absence', { target_record: recordId, note }, 'A justificativa fica disponível depois da atualização do servidor.');
+}
+
+export function removeAbsenceJustification(recordId) {
+  return professorRpc('remove_absence_justification', { target_record: recordId }, 'A justificativa fica disponível depois da atualização do servidor.');
 }

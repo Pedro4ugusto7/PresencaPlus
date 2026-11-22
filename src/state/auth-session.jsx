@@ -1,7 +1,8 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { connectionMessages } from '@/content/messages';
 import { getSupabase, isSupabaseConfigured, supabaseSetupIssue } from '@/data/remote/client';
 import { toAcademicProfile } from '@/data/remote/academic';
+import { profilePhaseForSession } from '@/state/session-phase';
 const AuthContext = createContext(null);
 function mapAuthFailure(error, fallback) {
   const message = (error?.message ?? '').toLowerCase();
@@ -42,7 +43,9 @@ export function AuthProvider({
   const [profileMessage, setProfileMessage] = useState(connectionMessages.profileLoad);
   const [entryMessage, setEntryMessage] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const loadedUserId = useRef(null);
   async function endSession() {
+    loadedUserId.current = null;
     const supabase = getSupabase();
     try {
       if (supabase) await supabase.auth.signOut();
@@ -83,16 +86,23 @@ export function AuthProvider({
       data.subscription.unsubscribe();
     };
   }, []);
+  const sessionUserId = session?.user?.id ?? null;
+  const sessionEmail = session?.user?.email ?? '';
   useEffect(() => {
     if (!sessionReady) return undefined;
-    if (!session?.user) {
+    const phase = profilePhaseForSession({
+      phase: loadedUserId.current && loadedUserId.current === sessionUserId ? 'ready' : 'idle',
+      userId: loadedUserId.current
+    }, sessionUserId);
+    if (phase === 'clear') {
+      loadedUserId.current = null;
       setProfile(null);
       setProfileState('idle');
       return undefined;
     }
+    if (phase === 'load') setProfileState('loading');
     let active = true;
-    setProfileState('loading');
-    readProfile(session.user.id, session.user.email ?? '').then(next => {
+    readProfile(sessionUserId, sessionEmail).then(next => {
       if (!active) return;
       if (next?.role === 'aluno') {
         setProfile(null);
@@ -100,10 +110,13 @@ export function AuthProvider({
         void refuseStudentAccess();
         return;
       }
+      if (!next && phase === 'refresh') return;
+      loadedUserId.current = next?.id ?? null;
       setProfile(next);
       setProfileState(next ? 'ready' : 'missing');
     }).catch(error => {
       if (!active) return;
+      if (phase === 'refresh') return;
       setProfile(null);
       setProfileMessage(error instanceof Error ? error.message : connectionMessages.profileLoad);
       setProfileState('error');
@@ -111,7 +124,7 @@ export function AuthProvider({
     return () => {
       active = false;
     };
-  }, [session, sessionReady, reloadToken]);
+  }, [sessionEmail, sessionReady, sessionUserId, reloadToken]);
   const status = !sessionReady || session != null && profileState === 'loading' ? 'loading' : !session ? 'signedOut' : profileState === 'missing' ? 'needsProfile' : profileState === 'error' ? 'profileError' : profile ? 'ready' : 'loading';
   const value = useMemo(() => {
     return {
@@ -151,6 +164,7 @@ export function AuthProvider({
             };
           }
           setEntryMessage(null);
+          loadedUserId.current = next.id;
           setSession(data.session);
           setProfile(next);
           setProfileState('ready');
@@ -279,6 +293,7 @@ export function AuthProvider({
             };
           }
           setEntryMessage(null);
+          loadedUserId.current = next.id;
           setProfile(next);
           setProfileState('ready');
           return {

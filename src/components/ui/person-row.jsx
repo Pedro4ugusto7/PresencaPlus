@@ -17,7 +17,7 @@ export function PersonRow({
   pending = false,
   onPress
 }) {
-  const label = pending ? 'Pendente' : markLabel(mark);
+  const label = pending ? 'Pendente' : mark ? markLabel(mark) : 'Sem registro';
   const content = <>
       <Avatar name={name} />
       <View style={styles.text}>
@@ -31,7 +31,7 @@ export function PersonRow({
           {timeLabel}
         </AppText>
       </View>
-      <Badge label={label} tone={pending ? 'accent' : badgeTone[mark]} />
+      <Badge label={label} tone={pending ? 'accent' : badgeTone[mark] ?? 'neutral'} />
     </>;
   if (!onPress) {
     return <View style={styles.row}>{content}</View>;

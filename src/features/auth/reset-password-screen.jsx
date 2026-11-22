@@ -3,7 +3,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { AppText } from '@/components/ui/app-text';
 import { Button } from '@/components/ui/button';
-import { Notice } from '@/components/ui/notice';
 import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
 import { hasRecoveryPayload, recoveryFromUrl } from '@/data/remote/recovery';
@@ -78,7 +77,7 @@ export function ResetPasswordScreen() {
     }
     router.replace(toHref('/professor'));
   }
-  return <Screen tone="plain" keyboard>
+  return <Screen tone="plain" keyboard notice={notice} noticeTone="warning">
       <AppText size="title" accessibilityRole="header">
         Nova senha
       </AppText>
@@ -96,6 +95,5 @@ export function ResetPasswordScreen() {
           <TextField label="Confirmar senha" value={confirm} onChangeText={setConfirm} placeholder="Repita a senha" secure autoCapitalize="none" textContentType="password" />
           <Button label={saving ? 'Salvando…' : 'Atualizar senha'} onPress={() => void save()} disabled={saving} />
         </> : null}
-      {notice ? <Notice message={notice} tone="warning" /> : null}
     </Screen>;
 }

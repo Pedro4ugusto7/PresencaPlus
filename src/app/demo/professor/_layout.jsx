@@ -1,4 +1,5 @@
 import { Stack } from 'expo-router';
+import { ProfessorShell } from '@/components/ui/professor-shell';
 import { DemoCatalogProvider } from '@/state/catalog';
 import { palette } from '@/theme';
 export const unstable_settings = {
@@ -6,11 +7,13 @@ export const unstable_settings = {
 };
 export default function ProfessorLayout() {
   return <DemoCatalogProvider role="professor">
-      <Stack screenOptions={{
-      headerShown: false,
-      contentStyle: {
-        backgroundColor: palette.background
-      }
-    }} />
+      <ProfessorShell area="demo">
+        <Stack screenOptions={{
+        headerShown: false,
+        contentStyle: {
+          backgroundColor: palette.background
+        }
+      }} />
+      </ProfessorShell>
     </DemoCatalogProvider>;
 }

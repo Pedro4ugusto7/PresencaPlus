@@ -31,6 +31,7 @@ export function DemoCatalogProvider({
       subjects,
       history: role === 'aluno' ? previewSource.listHistory() : [],
       weekly: role === 'professor' ? previewSource.weeklySample() : [],
+      reportSource: null,
       getClass: id => details.get(id) ?? null,
       getSubject: id => previewSource.getSubject(id),
       reload: () => undefined,
@@ -52,21 +53,28 @@ export function LiveCatalogProvider({
   const [subjects, setSubjects] = useState([]);
   const [history, setHistory] = useState([]);
   const [weekly, setWeekly] = useState([]);
+  const [reportSource, setReportSource] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
   const silentReload = useRef(false);
   const hasData = useRef(false);
-  const reload = useCallback((silent = false) => {
-    silentReload.current = silent;
+  const loadedAt = useRef(Date.now());
+  const signatureRef = useRef('');
+  const reload = useCallback(argument => {
+    const options = typeof argument === 'boolean' ? { silent: argument } : argument ?? {};
+    if (!options.force && options.minAgeMs && Date.now() - loadedAt.current < options.minAgeMs) return;
+    silentReload.current = Boolean(options.silent);
     setReloadToken(current => current + 1);
   }, []);
   useEffect(() => {
     if (!profile) {
       hasData.current = false;
+      signatureRef.current = '';
       setClasses([]);
       setClassDetails({});
       setSubjects([]);
       setHistory([]);
       setWeekly([]);
+      setReportSource(null);
       setStatus('loading');
       setError(null);
       return undefined;
@@ -81,10 +89,19 @@ export function LiveCatalogProvider({
     const load = profile.role === 'professor' ? loadProfessorWorkspace() : loadStudentWorkspace(profile.id);
     load.then(workspace => {
       if (!active) return;
+      const nextSignature = JSON.stringify(workspace.classDetails ?? workspace.subjects ?? workspace);
+      if (silent && nextSignature === signatureRef.current) {
+        loadedAt.current = Date.now();
+        setStatus('ready');
+        return;
+      }
+      signatureRef.current = nextSignature;
+      loadedAt.current = Date.now();
       if ('classes' in workspace) {
         setClasses(workspace.classes);
         setClassDetails(workspace.classDetails);
         setWeekly(workspace.weekly);
+        setReportSource(workspace.reportSource ?? null);
         setSubjects([]);
         setHistory([]);
       } else {
@@ -93,6 +110,7 @@ export function LiveCatalogProvider({
         setClasses([]);
         setClassDetails({});
         setWeekly([]);
+        setReportSource(null);
       }
       setStatus('ready');
       hasData.current = true;
@@ -116,10 +134,11 @@ export function LiveCatalogProvider({
     subjects,
     history,
     weekly,
+    reportSource,
     getClass: id => classDetails[id] ?? null,
     getSubject: id => subjects.find(subject => subject.id === id) ?? null,
     reload,
     paths: areaPaths('live')
-  }), [classDetails, classes, error, history, profile, reload, status, subjects, weekly]);
+  }), [classDetails, classes, error, history, profile, reload, reportSource, status, subjects, weekly]);
   return <CatalogContext.Provider value={value}>{children}</CatalogContext.Provider>;
 }

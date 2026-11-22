@@ -21,7 +21,7 @@ export function ProfessorDashboardScreen() {
   const live = catalog.mode === 'live';
   useFocusEffect(useCallback(() => {
     if (!live) return undefined;
-    reload(true);
+    reload({ silent: true, minAgeMs: 20000 });
   }, [live, reload]));
   const profile = catalog.profile;
   const classes = catalog.classes;
@@ -54,10 +54,10 @@ export function ProfessorDashboardScreen() {
           <AppText size="label" tone="muted">
             Cadastre turmas, disciplinas e alunos desta conta.
           </AppText>
-          <Button label="Abrir gestão" onPress={() => router.push('/professor/gestao')} />
+          <Button label="Abrir gestão" onPress={() => router.navigate('/professor/gestao')} />
         </Card>}
 
-      <SectionHeader title="Minhas turmas" actionLabel="Ver todas" onAction={() => router.push(catalog.paths.professorClasses)} />
+      <SectionHeader title="Minhas turmas" actionLabel="Ver todas" onAction={() => router.navigate(catalog.paths.professorClasses)} />
       {classes.length === 0 ? <EmptyState icon="classes" title="Nenhuma turma vinculada" description={catalog.mode === 'demo' ? 'A pré-visualização não encontrou turmas locais.' : 'Cadastre uma turma e uma disciplina em Gestão acadêmica. A oferta aparece aqui depois de gravada.'} /> : classes.slice(0, 3).map(item => <ClassCard key={item.id} item={item} />)}
     </Screen>
     </CatalogGate>;

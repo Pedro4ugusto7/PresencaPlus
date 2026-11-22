@@ -1,4 +1,4 @@
-import { Text } from 'react-native';
+import { Platform, Text } from 'react-native';
 import { palette } from '@/theme';
 const sizeStyles = {
   display: {
@@ -51,6 +51,7 @@ export function AppText({
 }) {
   return <Text style={[sizeStyles[size], {
     color: toneColor[tone],
-    textAlign: align
+    textAlign: align,
+    fontFamily: Platform.OS === 'web' ? 'system-ui, Segoe UI, sans-serif' : undefined
   }, style]} {...rest} />;
 }

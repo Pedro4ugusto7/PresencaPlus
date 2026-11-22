@@ -9,11 +9,13 @@ import { StatTile } from '@/components/ui/stat-tile';
 import { EmptyState } from '@/components/ui/empty-state';
 import { pendingMessages } from '@/content/messages';
 import { attendanceRate, frequencyTone, MINIMUM_FREQUENCY } from '@/domain';
+import { LiveReports } from '@/features/professor/live-reports';
 import { CatalogGate } from '@/features/shared/catalog-gate';
 import { useCatalog } from '@/state/catalog';
 import { spacing } from '@/theme';
 export function ReportsScreen() {
   const catalog = useCatalog();
+  if (catalog.mode !== 'demo') return <LiveReports />;
   const classes = catalog.classes;
   const rates = classes.map(item => ({
     item,

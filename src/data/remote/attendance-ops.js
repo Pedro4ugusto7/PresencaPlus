@@ -21,9 +21,9 @@ export async function createCheckInToken() {
 async function checkInTokenHash(token) {
   return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, token);
 }
-function missingPublicTokenColumn(error) {
+function missingColumn(error, name) {
   const detail = `${error?.message ?? ''} ${error?.details ?? ''} ${error?.hint ?? ''}`.toLowerCase();
-  return detail.includes('check_in_token');
+  return detail.includes(name) && (detail.includes('column') || detail.includes('schema cache') || detail.includes('could not find'));
 }
 export async function createSessionCode() {
   const span = 0x1000000;
@@ -103,14 +103,20 @@ export async function openClassSession(classId) {
       status: 'aberta',
       code
     };
-    let {
-      error
-    } = await ready.supabase.from('class_sessions').insert({
+    const legacyRow = {
       ...baseRow,
       check_in_token: token,
       check_in_token_hash: tokenHash
+    };
+    let { error } = await ready.supabase.from('class_sessions').insert({
+      ...legacyRow,
+      public_check_in_mode: 'codigo'
     }).select('id').single();
-    if (error && missingPublicTokenColumn(error)) {
+    if (error && missingColumn(error, 'public_check_in_mode')) {
+      const legacy = await ready.supabase.from('class_sessions').insert(legacyRow).select('id').single();
+      error = legacy.error;
+    }
+    if (error && missingColumn(error, 'check_in_token')) {
       const fallback = await ready.supabase.from('class_sessions').insert(baseRow).select('id').single();
       error = fallback.error;
     }
@@ -215,5 +221,32 @@ export async function closeClassSession(sessionId) {
   }
   return {
     ok: true
+  };
+}
+function missingRpc(error, name) {
+  const detail = `${error?.message ?? ''} ${error?.code ?? ''}`.toLowerCase();
+  return detail.includes(name) || detail.includes('pgrst202') || detail.includes('could not find');
+}
+export async function ensureSessionCodes(sessionId) {
+  const ready = client();
+  if (!ready.ok) return { ok: false, message: ready.message, mode: null, codes: [] };
+  const { data, error } = await ready.supabase.rpc('ensure_session_attendance_codes', { target_session: sessionId });
+  if (error) {
+    if (missingRpc(error, 'ensure_session_attendance_codes')) {
+      return { ok: false, message: 'Os códigos individuais ficam disponíveis depois da atualização do servidor.', mode: null, codes: [] };
+    }
+    return { ok: false, message: 'Não foi possível carregar os códigos desta chamada.', mode: null, codes: [] };
+  }
+  const rows = Array.isArray(data?.codes) ? data.codes : [];
+  return {
+    ok: data?.ok !== false,
+    message: data?.ok === false ? 'Não foi possível carregar os códigos desta chamada.' : null,
+    mode: data?.mode === 'codigo' || data?.mode === 'matricula' ? data.mode : null,
+    codes: rows.filter(item => typeof item?.code === 'string' && item.code).map(item => ({
+      studentId: item.student_id ?? null,
+      rosterStudentId: item.roster_student_id ?? null,
+      code: item.code,
+      used: item.used === true
+    }))
   };
 }

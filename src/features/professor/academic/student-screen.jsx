@@ -8,7 +8,8 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { Notice } from '@/components/ui/notice';
 import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
-import { enrollRosterStudent, loadAcademicCatalog, updateRosterStudent } from '@/data/remote/academic-admin';
+import { enrollRosterStudentSecure, loadAcademicCatalog, updateRosterStudent, withdrawRosterEnrollment } from '@/data/remote/academic-admin';
+import { validateRosterStudent } from '@/domain/academic-edit';
 
 function firstParam(value) {
   return typeof value === 'string' ? value : '';
@@ -26,6 +27,7 @@ export function AcademicStudentScreen() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState(null);
   const [noticeTone, setNoticeTone] = useState('warning');
+  const [confirmClassId, setConfirmClassId] = useState(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -54,15 +56,14 @@ export function AcademicStudentScreen() {
   const looseOfferings = (catalog?.offerings ?? []).filter(item => !item.groupId);
 
   async function save() {
-    const name = fullName.trim();
-    const code = registration.trim();
-    if (name.length < 1 || name.length > 160 || code.length < 1 || code.length > 40) {
-      setFormError('Informe o nome completo e a matrícula.');
+    const parsed = validateRosterStudent({ fullName, registrationCode: registration });
+    if (!parsed.ok) {
+      setFormError(parsed.message);
       return;
     }
     setFormError(undefined);
     setSaving(true);
-    const result = await updateRosterStudent(studentId, name, code);
+    const result = await updateRosterStudent(studentId, parsed.fullName, parsed.registrationCode);
     setSaving(false);
     setNotice(result.message);
     setNoticeTone(result.ok ? 'success' : 'warning');
@@ -71,8 +72,18 @@ export function AcademicStudentScreen() {
 
   async function enroll(classId) {
     setSaving(true);
-    const result = await enrollRosterStudent(classId, studentId);
+    const result = await enrollRosterStudentSecure(classId, studentId);
     setSaving(false);
+    setNotice(result.message);
+    setNoticeTone(result.ok ? 'success' : 'warning');
+    if (result.ok) await reload();
+  }
+
+  async function withdraw(classId) {
+    setSaving(true);
+    const result = await withdrawRosterEnrollment(classId, studentId);
+    setSaving(false);
+    setConfirmClassId(null);
     setNotice(result.message);
     setNoticeTone(result.ok ? 'success' : 'warning');
     if (result.ok) await reload();
@@ -83,18 +94,25 @@ export function AcademicStudentScreen() {
     return <Card key={offering.id}>
         <AppText size="heading">{offering.subjectName}</AppText>
         <AppText size="label" tone="muted">{offering.period} · {offering.schedule}</AppText>
-        {enrolled ? <AppText size="label" tone="present">Matriculado</AppText> : <Button label={saving ? 'Salvando…' : 'Matricular nesta disciplina'} variant="secondary" onPress={() => void enroll(offering.id)} disabled={saving} />}
+        {enrolled ? confirmClassId === offering.id ? <>
+            <Notice tone="warning" message="Desmatricular somente desta disciplina? O cadastro do aluno e as outras turmas permanecem, assim como as presenças já gravadas." />
+            <Button label={saving ? 'Desmatriculando…' : 'Confirmar desmatrícula'} variant="secondary" onPress={() => void withdraw(offering.id)} disabled={saving} />
+            <Button label="Cancelar" variant="ghost" onPress={() => setConfirmClassId(null)} disabled={saving} />
+          </> : <>
+            <AppText size="label" tone="present">Matriculado</AppText>
+            <Button label="Desmatricular" variant="ghost" onPress={() => setConfirmClassId(offering.id)} disabled={saving} />
+          </> : <Button label={saving ? 'Salvando…' : 'Matricular nesta disciplina'} variant="secondary" onPress={() => void enroll(offering.id)} disabled={saving} />}
       </Card>;
   }
 
-  return <Screen tone="brand" title={student?.full_name ?? 'Aluno'} subtitle="Disciplinas cursadas" onBack={() => router.back()} keyboard>
+  return <Screen tone="brand" title={student?.full_name ?? 'Aluno'} subtitle="Disciplinas cursadas" onBack={() => router.back()} keyboard safeBottom={false} notice={notice} noticeTone={noticeTone} onNoticeDismiss={() => setNotice(null)}>
       {loading && !catalog ? <LoadingState message="Carregando aluno…" /> : null}
       {!loading && catalog && !student ? <EmptyState icon="profile" title="Aluno não encontrado" description="Esse cadastro pode pertencer a outro professor." /> : null}
       {student ? <>
           <TextField label="Nome completo" value={fullName} onChangeText={setFullName} maxLength={160} error={formError} />
           <TextField label="Matrícula" value={registration} onChangeText={setRegistration} autoCapitalize="none" maxLength={40} />
-          <Button label={saving ? 'Salvando…' : 'Salvar dados'} onPress={() => void save()} disabled={saving} />
-          <Notice message="A matrícula só entra na disciplina que você escolher. O banco ainda não permite retirar uma matrícula já gravada." tone="info" />
+          <Button label={saving ? 'Salvando…' : 'Salvar alterações'} onPress={() => void save()} disabled={saving} />
+          <Notice message="A matrícula continua sendo o identificador do cadastro. A presença na aula usa o código individual da chamada, não este número." tone="info" />
           {groups.map(group => {
             const items = (catalog?.offerings ?? []).filter(item => item.groupId === group.id);
             if (!items.length) return null;
@@ -109,6 +127,5 @@ export function AcademicStudentScreen() {
             </Card> : null}
           {!catalog?.offerings.length ? <EmptyState icon="classes" title="Nenhuma disciplina disponível" description="Associe uma disciplina a uma turma antes de matricular o aluno." /> : null}
         </> : null}
-      {notice ? <Notice message={notice} tone={noticeTone} /> : null}
     </Screen>;
 }

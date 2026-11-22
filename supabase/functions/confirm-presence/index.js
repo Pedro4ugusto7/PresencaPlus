@@ -1,7 +1,6 @@
 const TOKEN_PATTERN = /^[0-9a-f]{64}$/;
 const WINDOW_MS = 60_000;
-const IP_LIMIT = 100;
-const TOKEN_LIMIT = 100;
+const IP_LIMIT = 120;
 const buckets = new Map();
 
 function headers() {
@@ -18,15 +17,13 @@ function reply(status, body) {
   return new Response(JSON.stringify(body), { status, headers: headers() });
 }
 
-function limited(key) {
-  const now = Date.now();
+function limited(key, now, windowMs, limit) {
   const current = buckets.get(key);
   if (!current || now >= current.reset) {
-    buckets.set(key, { count: 1, reset: now + WINDOW_MS });
+    buckets.set(key, { count: 1, reset: now + windowMs });
     return false;
   }
   current.count += 1;
-  const limit = key.startsWith('token:') ? TOKEN_LIMIT : IP_LIMIT;
   return current.count > limit;
 }
 
@@ -55,7 +52,9 @@ function publicMessage(result, name, subject) {
   if (result === 'duplicada' && name && subject) return duplicateMessage(name, subject);
   if (result === 'expirada') return 'Este QR Code venceu. Peça ao professor para abrir uma nova chamada.';
   if (result === 'encerrada') return 'Esta chamada já foi encerrada.';
-  if (result === 'sem_matricula') return 'Não encontramos esta matrícula nesta chamada.';
+  if (result === 'codigo_obrigatorio') return 'Esta chamada exige o código individual de presença. A matrícula não confirma.';
+  if (result === 'codigo_invalido' || result === 'sem_matricula') return 'Este código não vale para esta chamada.';
+  if (result === 'limite') return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.';
   return 'Este QR Code não é válido.';
 }
 
@@ -87,7 +86,8 @@ function present(data) {
     subject,
     group: typeof data?.group === 'string' ? data.group : null,
     period: typeof data?.period === 'string' ? data.period : null,
-    expiresAt: typeof data?.expires_at === 'string' ? data.expires_at : null
+    expiresAt: typeof data?.expires_at === 'string' ? data.expires_at : null,
+    checkInMode: data?.check_in_mode === 'codigo' || data?.check_in_mode === 'matricula' ? data.check_in_mode : null
   };
 }
 
@@ -108,7 +108,11 @@ Deno.serve(async request => {
     return reply(200, { ok: false, result: 'invalido', message: 'Este QR Code não é válido.' });
   }
 
-  if (limited(`ip:${clientAddress(request)}`) || limited(`token:${token}`)) {
+  const now = Date.now();
+  const address = clientAddress(request);
+  const individualCode = typeof body?.code === 'string' ? body.code : null;
+  const confirmingByCode = action === 'confirm' && individualCode != null && individualCode.trim() !== '';
+  if (!confirmingByCode && limited(`ip:${address}`, now, WINDOW_MS, IP_LIMIT)) {
     return reply(429, { ok: false, result: 'limite', message: 'Muitas tentativas. Aguarde um minuto e tente de novo.' });
   }
 
@@ -123,17 +127,30 @@ Deno.serve(async request => {
       subject: view.subject,
       group: view.group,
       period: view.period,
-      expiresAt: view.expiresAt
+      expiresAt: view.expiresAt,
+      checkInMode: view.checkInMode
     });
+  }
+
+  if (confirmingByCode) {
+    const result = await callRpc('confirm_public_attendance_by_code', {
+      token,
+      attendance_code: individualCode,
+      client_ip: address
+    });
+    if (!result.ok) return reply(503, { ok: false, result: 'indisponivel', message: 'Não foi possível confirmar a presença. Tente de novo.' });
+    const view = present(result.data);
+    const status = view.result === 'limite' ? 429 : 200;
+    return reply(status, { ok: view.result === 'presente', result: view.result, message: view.message, checkInMode: view.checkInMode });
   }
 
   const registration = normalizeRegistration(body?.registration);
   if (!registration) {
-    return reply(200, { ok: false, result: 'sem_matricula', message: 'Não encontramos esta matrícula nesta chamada.' });
+    return reply(200, { ok: false, result: 'codigo_invalido', message: 'Informe o código individual de presença.' });
   }
 
   const result = await callRpc('confirm_public_attendance', { token, registration });
   if (!result.ok) return reply(503, { ok: false, result: 'indisponivel', message: 'Não foi possível confirmar a presença. Tente de novo.' });
   const view = present(result.data);
-  return reply(200, { ok: view.result === 'presente', result: view.result, message: view.message });
+  return reply(200, { ok: view.result === 'presente', result: view.result, message: view.message, checkInMode: view.checkInMode });
 });

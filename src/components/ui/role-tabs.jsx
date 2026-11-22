@@ -14,7 +14,7 @@ export function RoleTabs({
         <View style={StyleSheet.flatten([styles.bar, {
         paddingBottom: Math.max(insets.bottom, spacing.sm)
       }])}>
-          {tabs.map(tab => <TabTrigger key={tab.name} name={tab.name} href={tab.href} asChild>
+          {tabs.map(tab => <TabTrigger key={tab.name} name={tab.name} href={tab.href} resetOnFocus={false} asChild>
               <RoleTabButton label={tab.label} icon={tab.icon} />
             </TabTrigger>)}
         </View>

@@ -22,6 +22,13 @@ export function areaPaths(area) {
     roster: turmaId => toHref(`${professor}/lista/[turmaId]`, {
       turmaId
     }),
+    callHistory: turmaId => toHref(`${professor}/chamadas/[turmaId]`, {
+      turmaId
+    }),
+    callSession: (turmaId, sessaoId) => toHref(`${professor}/chamadas/[turmaId]/[sessaoId]`, {
+      turmaId,
+      sessaoId
+    }),
     studentHome: toHref(student),
     studentSubjects: toHref(`${student}/disciplinas`),
     studentHistory: toHref(`${student}/historico`),

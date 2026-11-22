@@ -7,10 +7,10 @@ import { Chip } from '@/components/ui/chip';
 import { AppText } from '@/components/ui/app-text';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
-import { Notice } from '@/components/ui/notice';
 import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
-import { createOffering, createSubject, loadAcademicCatalog, renameAcademicGroup } from '@/data/remote/academic-admin';
+import { createOffering, createSubject, loadAcademicCatalog, renameAcademicGroup, updateOffering } from '@/data/remote/academic-admin';
+import { validateOffering } from '@/domain/academic-edit';
 import { spacing } from '@/theme';
 
 function firstParam(value) {
@@ -35,6 +35,10 @@ export function AcademicGroupScreen() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState(null);
   const [noticeTone, setNoticeTone] = useState('warning');
+  const [editingId, setEditingId] = useState(null);
+  const [editPeriod, setEditPeriod] = useState('');
+  const [editSchedule, setEditSchedule] = useState('');
+  const [editRoom, setEditRoom] = useState('');
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -127,13 +131,38 @@ export function AcademicGroupScreen() {
     await reload();
   }
 
+  function beginEdit(item) {
+    setEditingId(item.id);
+    setEditPeriod(item.period ?? '');
+    setEditSchedule(item.schedule ?? '');
+    setEditRoom(item.room ?? '');
+    setNotice(null);
+  }
+
+  async function saveOffering(item) {
+    const parsed = validateOffering({ period: editPeriod, schedule: editSchedule, room: editRoom });
+    if (!parsed.ok) {
+      setNoticeTone('warning');
+      setNotice(parsed.message);
+      return;
+    }
+    setSaving(true);
+    const result = await updateOffering(item.id, parsed);
+    setSaving(false);
+    setNotice(result.message);
+    setNoticeTone(result.ok ? 'success' : 'warning');
+    if (!result.ok) return;
+    setEditingId(null);
+    await reload();
+  }
+
   if (!groupId) {
-    return <Screen tone="brand" title="Turma" onBack={() => router.back()}>
+    return <Screen tone="brand" title="Turma" onBack={() => router.back()} safeBottom={false}>
         <LoadingState message="Carregando turma…" />
       </Screen>;
   }
 
-  return <Screen tone="brand" title={group?.name ?? 'Turma'} subtitle="Disciplinas ministradas nesta turma" onBack={() => router.back()} keyboard>
+  return <Screen tone="brand" title={group?.name ?? 'Turma'} subtitle="Disciplinas ministradas nesta turma" onBack={() => router.back()} keyboard safeBottom={false} notice={notice} noticeTone={noticeTone} onNoticeDismiss={() => setNotice(null)}>
       {loading && !catalog ? <LoadingState message="Carregando turma…" /> : null}
       {!loading && catalog && !group ? <EmptyState icon="classes" title="Turma não encontrada" description="Ela pode pertencer a outra conta ou ainda não ter sido gravada." /> : null}
       {group ? <>
@@ -143,6 +172,12 @@ export function AcademicGroupScreen() {
               <AppText size="heading">{item.subjectName}</AppText>
               <AppText size="label" tone="muted">{item.program} · {item.period}</AppText>
               <AppText size="label" tone="muted">{item.schedule} · {item.room}</AppText>
+              {editingId === item.id ? <>
+                  <TextField label="Período letivo" value={editPeriod} onChangeText={setEditPeriod} maxLength={80} />
+                  <TextField label="Horário" value={editSchedule} onChangeText={setEditSchedule} maxLength={160} />
+                  <TextField label="Sala" value={editRoom} onChangeText={setEditRoom} maxLength={80} />
+                  <Button label={saving ? 'Salvando…' : 'Salvar disciplina'} variant="secondary" onPress={() => void saveOffering(item)} disabled={saving} />
+                </> : <Button label="Editar turma" variant="ghost" onPress={() => beginEdit(item)} />}
             </Card>)}
           <AppText size="heading">Associar disciplina</AppText>
           <AppText size="label" tone="muted">
@@ -164,7 +199,6 @@ export function AcademicGroupScreen() {
           {offerError ? <AppText size="label" tone="warning">{offerError}</AppText> : null}
           <Button label={saving ? 'Salvando…' : 'Incluir na turma'} onPress={() => void addOffering()} disabled={saving} />
         </> : null}
-      {notice ? <Notice message={notice} tone={noticeTone} /> : null}
     </Screen>;
 }
 
